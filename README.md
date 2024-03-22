@@ -31,7 +31,7 @@ config :cantastic,
 
 ## Description
 
-Cantastic is supports the following configuration options:
+Cantastic supports the following configuration options:
 
 | Key | Description | Default value |
 |-----|-------------|---------------|
@@ -96,7 +96,3 @@ can_networks:
               0x02: reverse
               0x03: parking
 ```
-
-## Description
-
-TODO
