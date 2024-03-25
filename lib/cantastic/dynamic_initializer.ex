@@ -1,4 +1,6 @@
 defmodule Cantastic.DynamicInitializer do
+  @moduledoc false
+
   use GenServer
 
   alias Cantastic.Interface

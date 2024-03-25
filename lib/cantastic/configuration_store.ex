@@ -59,7 +59,7 @@ defmodule Cantastic.ConfigurationStore do
   end
 
   defp compute_networks() do
-    raw_can_network_specifications = Application.get_env(:cantastic, :can_networks) || "" |> String.split(",", trim: true)
+    raw_can_network_specifications = (Application.get_env(:cantastic, :can_networks) || "") |> String.split(",", trim: true)
     {:ok, config}                  = compute_can_configuration(raw_can_network_specifications)
     Enum.map(raw_can_network_specifications, fn (raw_can_network_specification) ->
       [network_name, interface] = raw_can_network_specification |> String.split(":")
