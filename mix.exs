@@ -10,12 +10,14 @@ defmodule Cantastic.MixProject do
       description: "An Elixir library to interact with CAN/Bus via lib_socket_can",
       deps: deps(),
       package: package(),
+      name: "Cantastic",
       docs: [
-        extras: ["README.md"],
-        main: "readme",
+        extras: ["README.md", "LICENCE.txt"],
+        main: "Cantastic"
       ],
       source_url: "https://github.com/Spin42/cantastic",
-      homepage_url: "https://github.com/Spin42/cantastic"
+      homepage_url: "https://github.com/Spin42/cantastic",
+      preferred_cli_env: [espec: :test]
     ]
   end
 
@@ -30,7 +32,10 @@ defmodule Cantastic.MixProject do
     [
       {:yaml_elixir, "~> 2.9"},
       {:jason, "~> 1.2"},
-      {:decimal, "~> 2.1.1"}
+      {:decimal, "~> 2.1.1"},
+      {:espec, "~> 1.9.2", only: :test},
+      {:faker, "~> 0.18", only: :test},
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]
   end
 

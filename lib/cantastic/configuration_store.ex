@@ -44,7 +44,8 @@ defmodule Cantastic.ConfigurationStore do
     end)
   end
 
-  defp compute_can_configuration() do
+  defp compute_can_configuration([]), do: {:ok, nil}
+  defp compute_can_configuration(_raw_can_network_specifications) do
     opt_app              = Application.get_env(:cantastic, :otp_app)
     priv_can_config_path = Application.get_env(:cantastic, :priv_can_config_path)
     config_path          = Path.join(:code.priv_dir(opt_app), priv_can_config_path)
@@ -58,8 +59,8 @@ defmodule Cantastic.ConfigurationStore do
   end
 
   defp compute_networks() do
-    raw_can_network_specifications = Application.get_env(:cantastic, :can_networks) |> String.split(",", trim: true)
-    {:ok, config}                  = compute_can_configuration()
+    raw_can_network_specifications = Application.get_env(:cantastic, :can_networks) || "" |> String.split(",", trim: true)
+    {:ok, config}                  = compute_can_configuration(raw_can_network_specifications)
     Enum.map(raw_can_network_specifications, fn (raw_can_network_specification) ->
       [network_name, interface] = raw_can_network_specification |> String.split(":")
       network_name              = network_name |> String.to_atom()
