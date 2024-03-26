@@ -21,7 +21,7 @@ defmodule Cantastic.Signal do
     case signal_specification.kind do
       "static" -> signal_specification.value
       "integer" ->
-        build_raw_decimal(signal_specification, Decimal.new(value))
+        build_raw_decimal(signal_specification, D.new(value))
       "decimal" ->
         build_raw_decimal(signal_specification, value)
       "enum" -> signal_specification.reverse_mapping[value]
@@ -29,9 +29,9 @@ defmodule Cantastic.Signal do
   end
 
   defp build_raw_decimal(signal_specification, value) do
-    scaled    = value |> Decimal.div(signal_specification.scale)
-    offsetted = scaled |> Decimal.sub(signal_specification.offset)
-    int       = offsetted |> Decimal.round() |> Decimal.to_integer()
+    scaled    = value |> D.div(signal_specification.scale)
+    offsetted = scaled |> D.sub(signal_specification.offset)
+    int       = offsetted |> D.round() |> D.to_integer()
     case signal_specification.endianness do
       "little" ->
         <<int::little-integer-size(signal_specification.value_length)>>
