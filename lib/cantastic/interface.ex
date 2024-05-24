@@ -1,5 +1,5 @@
 defmodule Cantastic.Interface do
-  alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher}
+  alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher, Util}
   require Logger
 
   @can_domain 29
@@ -25,7 +25,7 @@ defmodule Cantastic.Interface do
     interface_specs
     |> Enum.map(fn (%{network_name: network_name, network_config: network_config, socket: socket}) ->
       receiver_process_name         = receiver_process_name(network_name)
-      received_frame_specifications = compute_frame_specifications((network_config[:received_frames] || []), network_name)
+      received_frame_specifications = compute_frame_specifications((network_config[:received_frames] || []), network_name, :receive)
       watchers = received_frame_specifications
       |> Enum.map(fn({_id, frame_specification}) ->
         arguments = %{
@@ -50,7 +50,7 @@ defmodule Cantastic.Interface do
     interface_specs
     |> Enum.map(fn (%{network_name: network_name, network_config: network_config, socket: socket}) ->
       (network_config[:emitted_frames] || [])
-      |> compute_frame_specifications(network_name)
+      |> compute_frame_specifications(network_name, :emit)
       |> Enum.map(fn({_frame_id, frame_specification}) ->
         arguments = %{
           socket: socket,
@@ -88,10 +88,16 @@ defmodule Cantastic.Interface do
   end
 
   # {800: name: "handbrakeStatus", signals: [{name: 'handbrakeEngaged', value: true, mapping: ....}, {name: 'handbrakeError': {value: true, ...}}]}
-  defp compute_frame_specifications(yaml_frame_specifications, network_name) do
+  defp compute_frame_specifications(yaml_frame_specifications, network_name, direction) do
     yaml_frame_specifications
     |> Enum.reduce(%{}, fn(yaml_frame_specification, frame_specifications) ->
-      {:ok, frame_specification} = FrameSpecification.from_yaml(network_name, yaml_frame_specification)
+      {:ok, frame_specification} = FrameSpecification.from_yaml(network_name, yaml_frame_specification, direction)
+      if Map.has_key?(frame_specifications, frame_specification.id) do
+        throw "[Yaml configuration error] frame id: 0x#{Util.integer_to_hex(frame_specification.id)} is duplicated, please ensure that you only use a frame ID once per network."
+      end
+      if Enum.find(frame_specifications, fn ({_id, fs}) -> fs.name == frame_specification.name end) do
+        throw "[Yaml configuration error] frame name: '#{frame_specification.name}' is duplicated, please ensure that you only use a frame name once per network."
+      end
       frame_specifications |> Map.put(frame_specification.id, frame_specification)
     end)
   end

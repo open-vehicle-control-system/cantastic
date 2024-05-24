@@ -54,6 +54,7 @@ defmodule Cantastic.ReceivedFrameWatcher do
 
   @impl true
   def handle_call({:subscribe, frame_handler}, _from, state) do
+    ensure_frequency!(state)
     {:reply, :ok, %{state | frame_handlers: [frame_handler | state.frame_handlers]}}
   end
 
@@ -115,5 +116,11 @@ defmodule Cantastic.ReceivedFrameWatcher do
   def disable(network_name, frame_name) do
     watcher = Interface.received_frame_watcher_process_name(network_name, frame_name)
     GenServer.call(watcher, :disable)
+  end
+
+  defp ensure_frequency!(state) do
+    if !state.frame_frequency do
+      throw "[Yaml configuration error] Watched received frame '#{state.network_name}.#{state.frame_name}' is missing a frequency, please add it in the Yaml configuration."
+    end
   end
 end
