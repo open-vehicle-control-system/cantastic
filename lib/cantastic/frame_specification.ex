@@ -17,15 +17,21 @@ defmodule Cantastic.FrameSpecification do
     :frame_handlers,
     :allowed_frequency_leeway,
     :allowed_missing_frames,
-    :signal_specifications
+    :signal_specifications,
+    :data_length,
+    :byte_number,
+    :checksum_signal_specification,
+    checksum_required: false,
   ]
 
   def from_yaml(network_name, yaml_frame_specification, direction) do
     validate_keys!(network_name, yaml_frame_specification)
-    yaml_signal_specifications   = yaml_frame_specification[:signals] || []
-    {:ok, signal_specifications} = signal_specifications(network_name,yaml_frame_specification.id, yaml_frame_specification.name, yaml_signal_specifications)
-    validate_signal_specifications!(yaml_frame_specification.name, signal_specifications, direction)
-    frame_specification          = %Cantastic.FrameSpecification{
+    frame_name                    = yaml_frame_specification.name
+    yaml_signal_specifications    = yaml_frame_specification[:signals] || []
+    {:ok, signal_specifications}  = signal_specifications(network_name,yaml_frame_specification.id, yaml_frame_specification.name, yaml_signal_specifications)
+    data_length                   = compute_data_length_and_validate_signal_specifications!(network_name, frame_name, signal_specifications, direction)
+    checksum_signal_specification = find_and_validate_checksum_signal!(network_name, frame_name, signal_specifications)
+    frame_specification           = %Cantastic.FrameSpecification{
       id: yaml_frame_specification.id,
       name: yaml_frame_specification.name,
       network_name: network_name,
@@ -33,7 +39,11 @@ defmodule Cantastic.FrameSpecification do
       allowed_frequency_leeway: yaml_frame_specification[:allowed_frequency_leeway] || 10,
       allowed_missing_frames: yaml_frame_specification[:allowed_missing_frames] || 5,
       signal_specifications: signal_specifications,
-      frame_handlers: []
+      frame_handlers: [],
+      data_length: data_length,
+      byte_number: Integer.floor_div(data_length, 8),
+      checksum_required: !is_nil(checksum_signal_specification),
+      checksum_signal_specification: checksum_signal_specification
     }
     validate_specification!(frame_specification, direction)
     {:ok, frame_specification}
@@ -69,21 +79,34 @@ defmodule Cantastic.FrameSpecification do
     {:ok, computed}
   end
 
-  defp validate_signal_specifications!(frame_name, signal_specifications, direction) do
+  defp find_and_validate_checksum_signal!(network_name, frame_name, signal_specifications) do
+    checksum_specifications = signal_specifications |> Enum.filter(fn (i) -> i.kind == "checksum" end)
+    case  checksum_specifications do
+      nil -> nil
+      _ ->
+        if length(checksum_specifications) > 1 do
+          throw "[Yaml configuration error] Frame '#{network_name}.#{frame_name}' is defining more than one checksum signal while at most one is allowed."
+        end
+        checksum_specifications |> List.first()
+      end
+  end
+
+  defp compute_data_length_and_validate_signal_specifications!(network_name, frame_name, signal_specifications, direction) do
     total_length = signal_specifications
     |> Enum.reduce(0, fn (signal_specification, index) ->
       SignalSpecification.validate_specification!(signal_specification)
       if direction == :emit && signal_specification.value_start != index do
-        throw "[Yaml configuration error] Emitted frame '#{frame_name}' should define all data bits, signal '#{signal_specification.name}' is not in the right order or not contiguous with the previous signal"
+        throw "[Yaml configuration error] Emitted frame '#{network_name}.#{frame_name}' should define all data bits, signal '#{signal_specification.name}' is not in the right order or not contiguous with the previous signal"
       else
         index + signal_specification.value_length
       end
     end)
     if total_length > 64 do
-      throw "[Yaml configuration error] Emitted frame '#{frame_name}' is too long. Max frame data size is 64 bits."
+      throw "[Yaml configuration error] Frame '#{network_name}.#{frame_name}' is too long. Max frame data size is 64 bits."
     end
     if direction == :emit && rem(total_length, 8) != 0  do
-      throw "[Yaml configuration error] Emitted frame '#{frame_name}' is invalid. Data must fill the used bytes entirely. Please use a static filler if needed."
+      throw "[Yaml configuration error] Emitted frame '#{network_name}.#{frame_name}' is invalid. Data must fill the used bytes entirely. Please use a static filler if needed."
     end
+    total_length
   end
 end

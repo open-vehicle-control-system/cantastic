@@ -36,15 +36,15 @@ defmodule Cantastic.Receiver do
     <<
       id::little-integer-size(16),
       _unused1::binary-size(2),
-      data_length::little-integer-size(8),
+      byte_number::little-integer-size(8),
       _unused2::binary-size(3),
-      raw_data::binary-size(data_length),
+      raw_data::binary-size(byte_number),
       _unused3::binary
     >> = raw_frame
     frame = %Frame{
       id: id,
       network_name: network_name,
-      data_length: data_length,
+      byte_number: byte_number,
       raw_data: raw_data
     }
     {:ok, frame}

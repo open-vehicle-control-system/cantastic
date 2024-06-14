@@ -13,22 +13,22 @@ defmodule Cantastic.Signal do
     "[Signal] #{signal.frame_name}.#{signal.name} = #{signal.value}"
   end
 
-  def build_raw(raw_data, signal_specification, value) do
-    value = case is_function(value, 1) do
-      true -> value.(raw_data)
-      false -> value
-    end
+  def build_raw(signal_specification, value) do
     case signal_specification.kind do
-      "static" -> signal_specification.value
+      "static" ->
+        signal_specification.value
       "integer" ->
         build_raw_decimal(signal_specification, D.new(value))
       "decimal" ->
         build_raw_decimal(signal_specification, value)
-      "enum" -> signal_specification.reverse_mapping[value]
+      "enum" ->
+        signal_specification.reverse_mapping[value]
+      "checksum" ->
+        <<>>
     end
   end
 
-  defp build_raw_decimal(signal_specification, value) do
+  def build_raw_decimal(signal_specification, value) do
     scaled    = value |> D.div(signal_specification.scale)
     offsetted = scaled |> D.sub(signal_specification.offset)
     int       = offsetted |> D.round() |> D.to_integer()
@@ -49,7 +49,7 @@ defmodule Cantastic.Signal do
       value: nil
     }
     raw_data            = frame.raw_data
-    raw_data_bit_length = frame.data_length * 8
+    raw_data_bit_length = frame.byte_number * 8
     head_length         = signal_specification.value_start
     value_length        = signal_specification.value_length
     tail_length         = raw_data_bit_length - head_length - value_length

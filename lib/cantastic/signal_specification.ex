@@ -2,7 +2,7 @@ defmodule Cantastic.SignalSpecification do
   alias Cantastic.Util
   alias Decimal, as: D
 
-  @valid_kinds ["decimal", "integer", "static", "enum"]
+  @valid_kinds ["decimal", "integer", "static", "enum", "checksum"]
   @valid_signs ["signed", "unsigned"]
   @valid_endiannesses ["big", "little"]
   @authorized_yaml_keys [:name, :kind, :precision, :sign, :value_start, :value_length, :endianness, :mapping, :unit, :scale, :offset, :value]
