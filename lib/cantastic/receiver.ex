@@ -71,7 +71,7 @@ defmodule Cantastic.Receiver do
       {_frame_id, frame_specification} -> {:ok, frame_specification}
       nil ->
         spec = frame_specifications |> Map.values() |> List.first()
-        network_name = spec.network_name
+        network_name = Map.get(spec, :network_name, "UNKOWN_NETWORK")
         {:error, "Frame '#{frame_name}' not found for network '#{network_name}'"}
     end
   end
