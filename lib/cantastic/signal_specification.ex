@@ -16,6 +16,7 @@ defmodule Cantastic.SignalSpecification do
     :frame_name,
     :value_start,
     :value_length,
+    :value_ranges,
     :endianness,
     :mapping,
     :reverse_mapping,

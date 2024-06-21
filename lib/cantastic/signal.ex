@@ -48,27 +48,22 @@ defmodule Cantastic.Signal do
       unit: signal_specification.unit,
       value: nil
     }
-    raw_data            = frame.raw_data
-    raw_data_bit_length = frame.byte_number * 8
-    head_length         = signal_specification.value_start
-    value_length        = signal_specification.value_length
-    tail_length         = raw_data_bit_length - head_length - value_length
+
+    {:ok, raw_value, value_length} = extract_raw_value(frame.raw_data, signal_specification)
 
     try do
       value = case signal_specification.kind do
         "static" ->
-          <<_head::size(head_length), val::bitstring-size(value_length), _tail::size(tail_length)>> = raw_data
-          val
+          raw_value
         "decimal" ->
-          interpret_decimal(raw_data, signal_specification, head_length, value_length, tail_length)
+          interpret_decimal(raw_value, signal_specification, value_length)
           |> D.round(signal_specification.precision)
         "integer" ->
-          interpret_decimal(raw_data, signal_specification, head_length, value_length, tail_length)
+          interpret_decimal(raw_value, signal_specification, value_length)
           |> D.round()
           |> D.to_integer()
         "enum" ->
-          <<_head::size(head_length), val::bitstring-size(value_length), _tail::size(tail_length)>> = raw_data
-          signal_specification.mapping[val]
+          signal_specification.mapping[raw_value]
       end
       {:ok, %{signal | value: value}}
     rescue
@@ -77,21 +72,41 @@ defmodule Cantastic.Signal do
     end
   end
 
-  defp interpret_decimal(raw_data, signal_specification, head_length, value_length, tail_length) do
+  defp interpret_decimal(raw_val, signal_specification, value_length) do
     int = case {signal_specification.endianness, signal_specification.sign} do
       {"little", "signed"} ->
-        <<_head::size(head_length), val::little-signed-integer-size(value_length), _tail::size(tail_length)>> = raw_data
+        <<val::little-signed-integer-size(value_length)>> = raw_val
         val
       {"little", "unsigned"} ->
-        <<_head::size(head_length), val::little-unsigned-integer-size(value_length), _tail::size(tail_length)>> = raw_data
+        <<val::little-unsigned-integer-size(value_length)>> = raw_val
         val
       {"big", "signed"} ->
-        <<_head::size(head_length), val::big-signed-integer-size(value_length), _tail::size(tail_length)>> = raw_data
+        <<val::big-signed-integer-size(value_length)>> = raw_val
         val
       {"big", "unsigned"} ->
-        <<_head::size(head_length), val::big-unsigned-integer-size(value_length), _tail::size(tail_length)>> = raw_data
+        <<val::big-unsigned-integer-size(value_length)>> = raw_val
         val
     end
     D.new(int) |> D.mult(signal_specification.scale) |> D.add(signal_specification.offset)
+  end
+
+  defp extract_raw_value(raw_data, signal_specification) do
+    case signal_specification.value_start do
+      value_start when is_integer(value_start) ->
+        raw_value = extract_segment(raw_data, value_start, signal_specification.value_length)
+        {:ok, raw_value, signal_specification.value_length}
+      ranges ->
+        {raw_value, value_length} = ranges
+          |> Enum.reduce({<<>>, 0}, fn(range, {value_accumulator, value_length_accumulator}) ->
+            partial_raw_value = extract_segment(raw_data, range.start, range.length)
+            {<<partial_raw_value::bitstring, value_accumulator::bitstring>>, value_length_accumulator + range.length}
+          end)
+          {:ok, raw_value, value_length}
+    end
+  end
+
+  defp extract_segment(raw_data, head_length, value_length) do
+    <<_head::bitstring-size(head_length), segment::bitstring-size(value_length), _tail::bitstring>> = raw_data
+    segment
   end
 end
