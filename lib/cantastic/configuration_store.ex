@@ -53,7 +53,7 @@ defmodule Cantastic.ConfigurationStore do
   end
 
   defp read_yaml(path) do
-    with {:ok, config}  <- YamlElixir.read_from_file(path, atoms: true),
+    with {:ok, config}  <- YamlElixir.read_from_file(path, atoms: true, merge_anchors: true),
          {:ok, encoded} <- Jason.encode(config),
          {:ok, decoded} <- encoded |> Jason.decode(keys: :atoms)
     do
