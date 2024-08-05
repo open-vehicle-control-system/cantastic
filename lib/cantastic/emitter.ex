@@ -76,6 +76,13 @@ defmodule Cantastic.Emitter do
     {:reply, :ok, state}
   end
 
+  @impl true
+  def handle_call({:forward, frame}, _from, state) do
+    raw_frame = Frame.to_raw(frame)
+    :socket.send(state.socket, raw_frame)
+    {:reply, :ok, state}
+  end
+
   @doc """
   Send the frame once.
   `configure/2` has to be called before the emitter can start emitting on the bus.
@@ -179,5 +186,10 @@ defmodule Cantastic.Emitter do
   def disable(network_name, frame_name) do
     emitter = Interface.emitter_process_name(network_name, frame_name)
     GenServer.cast(emitter, :disable)
+  end
+
+  def forward(network_name, frame) do
+    emitter = Interface.emitter_process_name(network_name, frame.name)
+    GenServer.call(emitter, {:forward, frame})
   end
 end

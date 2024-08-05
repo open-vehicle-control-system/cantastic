@@ -69,7 +69,7 @@ defmodule Cantastic.Frame do
     |> Enum.join(" ")
   end
 
-  defp to_raw(frame) do
+  def to_raw(frame) do
     byte_number = frame.byte_number
     padding     = 8 - byte_number
     << frame.id::little-integer-size(16),
