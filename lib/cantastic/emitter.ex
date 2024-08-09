@@ -18,7 +18,7 @@ defmodule Cantastic.Emitter do
       %{
         socket: socket,
         network_name: network_name,
-        parameters_builder_function: nil,
+        parameters_builder_function: :default,
         sending_timer: nil,
         data: %{},
         frequency: frame_specification.frequency,
@@ -70,8 +70,13 @@ defmodule Cantastic.Emitter do
 
   @impl true
   def handle_call({:configure, initialization_args}, _from, state) do
+    parameters_builder_function = case initialization_args.parameters_builder_function do
+      :default -> fn (data) -> {:ok, data, data} end
+      function when is_function(function) -> function
+    end
+
     state = state
-    |> Map.put(:parameters_builder_function, initialization_args.parameters_builder_function)
+    |> Map.put(:parameters_builder_function, parameters_builder_function)
     |> Map.put(:data, initialization_args.initial_data)
     {:reply, :ok, state}
   end

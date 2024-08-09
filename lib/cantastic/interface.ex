@@ -9,6 +9,7 @@ defmodule Cantastic.Interface do
   def configure_children() do
     interface_specs = ConfigurationStore.networks() |> Enum.map(fn (network) ->
       {:ok, socket} = initialize_socket(network.interface, network.bitrate, ConfigurationStore.setup_can_interfaces())
+      Logger.info("CAN network: '#{network.network_name}' ready on interface: '#{network.interface}'")
       %{
         network_name: network.network_name,
         network_config: network.network_config,
@@ -107,7 +108,7 @@ defmodule Cantastic.Interface do
     Logger.error("Could not open CAN bus interface #{interface}")
   end
   defp setup_can_interface(interface, _bitrate, false = _setup_can_interfaces, _retry_number) do
-    Logger.info("Connection to the CAN bus #{interface} skipped following can interface setup config")
+    Logger.debug("Connection to the CAN bus #{interface} skipped following can interface setup config")
     :ok
   end
   defp setup_can_interface(interface, bitrate, setup_can_interfaces, retry_number) when binary_part(interface, 0, 4) == "vcan" do

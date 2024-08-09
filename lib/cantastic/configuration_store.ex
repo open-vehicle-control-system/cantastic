@@ -44,8 +44,34 @@ defmodule Cantastic.ConfigurationStore do
     end)
   end
 
-  defp compute_can_configuration([]), do: {:ok, nil}
-  defp compute_can_configuration(_raw_can_network_specifications) do
+  defp compute_networks() do
+    {:ok, configuration}        = read_configuration()
+    can_network_mappings = case Application.get_env(:cantastic, :can_network_mappings) do
+      nil -> throw "CAN network mappings are missing from the Cantastic configuratiion"
+      [] -> throw "You must define at least one CAN network mapping in the Cantastic configuratiion"
+      fun when is_function(fun) -> fun.()
+      networks when is_list(networks) -> networks
+      {module, function_name, params} -> apply(module, function_name, params)
+      _ -> throw "CAN netowrk mappings is not valid in the Cantastic configuratiion"
+    end
+
+    Enum.map(can_network_mappings, fn ({network_name, interface}) ->
+      network_name          = network_name |> String.to_atom()
+      network_configuration = configuration.can_networks[network_name]
+      if is_nil(network_configuration) do
+         throw "[Yaml configuration error] CAN Network: '#{network_name}' is missing from the Yaml configuration."
+      end
+      bitrate               = network_configuration.bitrate
+      %{
+        network_name: network_name,
+        interface: interface,
+        network_config: network_configuration,
+        bitrate: bitrate
+      }
+    end)
+  end
+
+  defp read_configuration() do
     opt_app              = Application.get_env(:cantastic, :otp_app)
     priv_can_config_path = Application.get_env(:cantastic, :priv_can_config_path)
     config_path          = Path.join(:code.priv_dir(opt_app), priv_can_config_path)
@@ -83,21 +109,4 @@ defmodule Cantastic.ConfigurationStore do
     read_yaml(full_path)
   end
   defp interpret_node(_, node), do: {:ok, node}
-
-  defp compute_networks() do
-    raw_can_network_specifications = (Application.get_env(:cantastic, :can_networks) || "") |> String.split(",", trim: true)
-    {:ok, config}                  = compute_can_configuration(raw_can_network_specifications)
-    Enum.map(raw_can_network_specifications, fn (raw_can_network_specification) ->
-      [network_name, interface] = raw_can_network_specification |> String.split(":")
-      network_name              = network_name |> String.to_atom()
-      network_config            = config.can_networks[network_name]
-      bitrate                   = network_config.bitrate
-      %{
-        network_name: network_name,
-        interface: interface,
-        network_config: network_config,
-        bitrate: bitrate
-      }
-    end)
-  end
 end
