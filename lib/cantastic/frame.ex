@@ -28,6 +28,7 @@ defmodule Cantastic.Frame do
     |> Enum.reduce(<<>>, fn (signal_specification, raw_data) ->
       value      = (parameters || %{})[signal_specification.name]
       raw_signal = Signal.build_raw(signal_specification, value)
+      if is_nil(raw_signal), do: throw "Signal '#{frame_specification.network_name}.#{frame_specification.name}.#{signal_specification.name}' value is missing from emitter data."
       <<raw_data::bitstring, raw_signal::bitstring>>
     end)
     |> include_checksum_if_required(frame_specification, parameters)
