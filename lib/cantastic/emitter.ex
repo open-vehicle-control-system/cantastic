@@ -8,6 +8,8 @@ defmodule Cantastic.Emitter do
   use GenServer
   alias Cantastic.{Interface, Frame}
 
+  @sending_timeout 100
+
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
   end
@@ -22,7 +24,9 @@ defmodule Cantastic.Emitter do
         sending_timer: nil,
         data: %{},
         frequency: frame_specification.frequency,
-        frame_specification: frame_specification
+        frame_specification: frame_specification,
+        failed_sending_count: 0,
+        last_sending_error_reason: nil
       }
     }
   end
@@ -30,9 +34,16 @@ defmodule Cantastic.Emitter do
   @impl true
   def handle_info(:send_frame, state) do
     {:ok, parameters, data} = state.parameters_builder_function.(state.data)
-    {:ok, raw_frame}         = Frame.build_raw(state.frame_specification, parameters)
-    :socket.send(state.socket, raw_frame)
+    {:ok, raw_frame}        = Frame.build_raw(state.frame_specification, parameters)
+    state                   = send_raw(state, raw_frame)
     {:noreply, %{state | data: data}}
+  end
+
+  @impl true
+  def handle_cast({:forward, frame}, state) do
+    raw_frame = Frame.to_raw(frame)
+    state     = send_raw(state, raw_frame)
+    {:noreply, state}
   end
 
   @impl true
@@ -78,13 +89,6 @@ defmodule Cantastic.Emitter do
     state = state
     |> Map.put(:parameters_builder_function, parameters_builder_function)
     |> Map.put(:data, initialization_args.initial_data)
-    {:reply, :ok, state}
-  end
-
-  @impl true
-  def handle_call({:forward, frame}, _from, state) do
-    raw_frame = Frame.to_raw(frame)
-    :socket.send(state.socket, raw_frame)
     {:reply, :ok, state}
   end
 
@@ -195,6 +199,13 @@ defmodule Cantastic.Emitter do
 
   def forward(network_name, frame) do
     emitter = Interface.emitter_process_name(network_name, frame.name)
-    GenServer.call(emitter, {:forward, frame})
+    GenServer.cast(emitter, {:forward, frame})
+  end
+
+  defp send_raw(state, raw_frame) do
+    case :socket.send(state.socket, raw_frame, @sending_timeout) do
+      :ok -> state
+      {:error, reason} -> %{state | failed_sending_count: state.failed_sending_count + 1, last_sending_error_reason: reason}
+    end
   end
 end
