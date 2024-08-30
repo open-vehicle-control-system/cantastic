@@ -55,7 +55,11 @@ defmodule Cantastic.ConfigurationStore do
       _ -> throw "CAN netowrk mappings is not valid in the Cantastic configuratiion"
     end
 
-    Enum.map(can_network_mappings, fn ({network_name, interface}) ->
+    Enum.map(can_network_mappings, fn (can_network_mapping) ->
+      {network_name, interface, labels} = case can_network_mapping do
+        {network_name, interface} -> {network_name, interface, []}
+        {network_name, interface, labels: labels} -> {network_name, interface, labels}
+      end
       network_name          = network_name |> String.to_atom()
       network_configuration = configuration.can_networks[network_name]
       if is_nil(network_configuration) do
@@ -66,7 +70,8 @@ defmodule Cantastic.ConfigurationStore do
         network_name: network_name,
         interface: interface,
         network_config: network_configuration,
-        bitrate: bitrate
+        bitrate: bitrate,
+        labels: labels
       }
     end)
   end
