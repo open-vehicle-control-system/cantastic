@@ -89,6 +89,7 @@ defmodule Cantastic.Emitter do
     state = state
     |> Map.put(:parameters_builder_function, parameters_builder_function)
     |> Map.put(:data, initialization_args.initial_data)
+    if Map.get(initialization_args, :enable, false), do: GenServer.cast(self(), :enable)
     {:reply, :ok, state}
   end
 
