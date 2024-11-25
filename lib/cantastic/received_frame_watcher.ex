@@ -19,7 +19,10 @@ defmodule Cantastic.ReceivedFrameWatcher do
         frame_frequency: frame_specification.frequency,
         frame_allowed_frequency_leeway: frame_specification.allowed_frequency_leeway,
         allowed_missing_frames: frame_specification.allowed_missing_frames,
-        missed_frame_count: 0
+        required_on_time_frames: frame_specification.required_on_time_frames,
+        missed_frame_count: 0,
+        is_alive: false,
+        on_time_frame_count: 0
       }
     }
   end
@@ -29,14 +32,20 @@ defmodule Cantastic.ReceivedFrameWatcher do
     now          = DateTime.utc_now()
     diff         = DateTime.diff(now, state.frame_received_at, :millisecond)
     allowed_diff = state.frame_frequency + state.frame_allowed_frequency_leeway
-    case {diff > allowed_diff, state.missed_frame_count} do
-      {true, count} when count > state.allowed_missing_frames ->
+    is_late      = diff > allowed_diff
+    is_alive     = state.is_alive
+    cond do
+      is_alive && is_late && state.missed_frame_count >= state.allowed_missing_frames ->
         send_to_frame_handlers(state.frame_handlers, state.network_name, state.frame_name)
+        {:noreply, %{state | is_alive: false}}
+      is_alive && is_late ->
+        {:noreply, %{state | on_time_frame_count: 0,  missed_frame_count: state.missed_frame_count + 1}}
+      !is_alive && !is_late && state.on_time_frame_count >= state.required_on_time_frames ->
+        {:noreply, %{state | is_alive: true}}
+      !is_alive && !is_late ->
+        {:noreply, %{state | on_time_frame_count: state.on_time_frame_count + 1,  missed_frame_count: 0}}
+      true ->
         {:noreply, state}
-      {true, count} ->
-        {:noreply, %{state | missed_frame_count: count + 1}}
-      {false, _count} ->
-        {:noreply, %{state | missed_frame_count: 0}}
     end
   end
 
@@ -58,7 +67,6 @@ defmodule Cantastic.ReceivedFrameWatcher do
     {:reply, :ok, %{state | frame_handlers: [frame_handler | state.frame_handlers]}}
   end
 
-  @impl true
   def handle_call(:enable, _from, state) do
     case {state.frame_frequency, state.watching_timer}  do
       {nil, _} ->
@@ -71,7 +79,6 @@ defmodule Cantastic.ReceivedFrameWatcher do
     end
   end
 
-  @impl true
   def handle_call(:disable, _from, state) do
     case state.watching_timer do
       nil ->
@@ -80,6 +87,10 @@ defmodule Cantastic.ReceivedFrameWatcher do
         {:ok, _} = :timer.cancel(watching_timer)
         {:reply, :ok, %{state | watching_timer: nil}}
     end
+  end
+
+  def handle_call(:is_alive?, _from, state) do
+      {:reply, {:ok, state.is_alive}, state}
   end
 
   def subscribe(network_name, frame_names, frame_handler) when is_list(frame_names) do
@@ -116,6 +127,11 @@ defmodule Cantastic.ReceivedFrameWatcher do
   def disable(network_name, frame_name) do
     watcher = Interface.received_frame_watcher_process_name(network_name, frame_name)
     GenServer.call(watcher, :disable)
+  end
+
+  def is_alive?(network_name, frame_name) do
+    watcher = Interface.received_frame_watcher_process_name(network_name, frame_name)
+    GenServer.call(watcher, :is_alive?)
   end
 
   defp ensure_frequency!(state) do
