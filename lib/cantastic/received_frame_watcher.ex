@@ -1,6 +1,6 @@
 defmodule Cantastic.ReceivedFrameWatcher do
   use GenServer
-  alias Cantastic.{Interface}
+  alias Cantastic.{Frame, Interface}
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -13,7 +13,9 @@ defmodule Cantastic.ReceivedFrameWatcher do
       %{
         watching_timer: nil,
         network_name: network_name,
-        frame_received_at: DateTime.utc_now(),
+        frame_a_received_at: nil,
+        frame_b_received_at: nil,
+        last_received_frame: :b,
         frame_name: frame_specification.name,
         frame_handlers: frame_specification.frame_handlers,
         frame_frequency: frame_specification.frequency,
@@ -29,11 +31,18 @@ defmodule Cantastic.ReceivedFrameWatcher do
 
   @impl true
   def handle_info(:validate_frequency, state) do
-    now          = DateTime.utc_now()
-    diff         = DateTime.diff(now, state.frame_received_at, :millisecond)
+    diff = cond do
+      is_nil(state.frame_a_received_at) || is_nil(state.frame_b_received_at) ->
+        0
+      state.last_received_frame == :a -> DateTime.diff(state.frame_a_received_at, state.frame_b_received_at, :millisecond)
+      state.last_received_frame == :b -> DateTime.diff(state.frame_b_received_at, state.frame_a_received_at, :millisecond)
+    end
     allowed_diff = state.frame_frequency + state.frame_allowed_frequency_leeway
     is_late      = diff > allowed_diff
     is_alive     = state.is_alive
+    if state.frame_name == "front_controller_alive" do
+      IO.inspect("alive: #{is_alive} - diff #{diff} - adiff #{allowed_diff} late #{is_late} - misssed #{state.missed_frame_count}")
+    end
     cond do
       is_alive && is_late && state.missed_frame_count >= state.allowed_missing_frames ->
         send_to_frame_handlers(state.frame_handlers, state.network_name, state.frame_name)
@@ -50,9 +59,11 @@ defmodule Cantastic.ReceivedFrameWatcher do
   end
 
   @impl true
-  def handle_info({:handle_frame,  _frame}, state) do
-    now = DateTime.utc_now()
-    {:noreply, %{state | frame_received_at: now}}
+  def handle_info({:handle_frame,  %Frame{created_at: created_at}}, state) do
+    case state.last_received_frame do
+      :a -> {:noreply, %{state | frame_b_received_at: created_at, last_received_frame: :b}}
+      :b -> {:noreply, %{state | frame_a_received_at: created_at, last_received_frame: :a}}
+    end
   end
 
   defp send_to_frame_handlers(frame_handlers, network_name, frame_name) do

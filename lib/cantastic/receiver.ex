@@ -45,7 +45,8 @@ defmodule Cantastic.Receiver do
       id: id,
       network_name: network_name,
       byte_number: byte_number,
-      raw_data: raw_data
+      raw_data: raw_data,
+      created_at: DateTime.utc_now()
     }
     {:ok, frame}
   end

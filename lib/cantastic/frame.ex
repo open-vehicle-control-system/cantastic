@@ -8,7 +8,7 @@ defmodule Cantastic.Frame do
     :byte_number,
     :raw_data,
     :network_name,
-    created_at: DateTime.utc_now(),
+    :created_at,
     signals: %{}
   ]
 
@@ -18,7 +18,8 @@ defmodule Cantastic.Frame do
       id: frame_specification.id,
       network_name: frame_specification.network_name,
       raw_data: raw_data,
-      byte_number: frame_specification.byte_number
+      byte_number: frame_specification.byte_number,
+      created_at: DateTime.utc_now()
     }
     {:ok, to_raw(frame)}
   end
