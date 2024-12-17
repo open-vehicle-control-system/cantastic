@@ -10,6 +10,7 @@ defmodule Cantastic.Receiver do
   @impl true
   def init(%{process_name:  _, frame_specifications: frame_specifications, socket: socket, network_name: network_name}) do
     receive_frame(200)
+    Process.flag(:priority, :high)
     {:ok,
       %{
         network_name: network_name,
@@ -32,7 +33,12 @@ defmodule Cantastic.Receiver do
   end
 
   defp receive_one_frame(network_name, socket) do
-    {:ok, raw_frame} = :socket.recv(socket)
+    {:ok, %{
+      iov: [raw_frame],
+      ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+    }} = :socket.recvmsg(socket)
+    reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec
+
     <<
       id::little-integer-size(16),
       _unused1::binary-size(2),
@@ -46,7 +52,8 @@ defmodule Cantastic.Receiver do
       network_name: network_name,
       byte_number: byte_number,
       raw_data: raw_data,
-      created_at: DateTime.utc_now()
+      created_at: DateTime.utc_now(),
+      reception_timestamp: reception_timestamp
     }
     {:ok, frame}
   end

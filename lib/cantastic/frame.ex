@@ -9,6 +9,7 @@ defmodule Cantastic.Frame do
     :raw_data,
     :network_name,
     :created_at,
+    :reception_timestamp,
     signals: %{}
   ]
 
