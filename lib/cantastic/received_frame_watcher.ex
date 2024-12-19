@@ -1,7 +1,6 @@
 defmodule Cantastic.ReceivedFrameWatcher do
   use GenServer
   alias Cantastic.{Frame, Interface}
-  require Logger
 
 
   def start_link(%{process_name: process_name} = args) do
@@ -51,7 +50,6 @@ defmodule Cantastic.ReceivedFrameWatcher do
       true -> %{state | last_missed_frame_at: now}
       false -> state
     end
-    Logger.info(inspect(state))
     cond do
       is_alive && is_late && state.missed_frame_count >= state.allowed_missing_frames ->
         send_to_frame_handlers(state.frame_handlers, state.network_name, state.frame_name)
