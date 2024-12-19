@@ -1,6 +1,7 @@
 defmodule Cantastic.ReceivedFrameWatcher do
   use GenServer
   alias Cantastic.{Frame, Interface}
+  require Logger
 
 
   def start_link(%{process_name: process_name} = args) do
@@ -10,6 +11,7 @@ defmodule Cantastic.ReceivedFrameWatcher do
   @impl true
   def init(%{process_name:  _, frame_specification: frame_specification, network_name: network_name}) do
     :ok = Cantastic.Receiver.subscribe(self(), network_name, [frame_specification.name])
+    now = System.monotonic_time(:millisecond)
     {:ok,
       %{
         watching_timer: nil,
@@ -27,26 +29,29 @@ defmodule Cantastic.ReceivedFrameWatcher do
         missed_frame_count: 0,
         is_alive: false,
         on_time_frame_count: 0,
-        last_missed_frame_at: System.monotonic_time(:millisecond)
+        last_missed_frame_at: now,
+        system_last_frame_received_at: now
       }
     }
   end
 
   @impl true
   def handle_info(:validate_frequency, state) do
-    diff = cond do
-      is_nil(state.frame_a_received_at) || is_nil(state.frame_b_received_at) -> 0
+    now          = System.monotonic_time(:millisecond)
+    allowed_diff = state.frame_frequency + state.frame_allowed_frequency_leeway
+    frame_diff = cond do
+      is_nil(state.frame_a_received_at) || is_nil(state.frame_b_received_at) -> allowed_diff + 1
       state.last_received_frame == :a -> state.frame_a_received_at - state.frame_b_received_at
       state.last_received_frame == :b -> state.frame_b_received_at - state.frame_a_received_at
     end
-    allowed_diff = state.frame_frequency + state.frame_allowed_frequency_leeway
-    is_late      = diff > allowed_diff
+    system_diff = now - state.system_last_frame_received_at
+    is_late      = frame_diff > allowed_diff || system_diff > 10 * allowed_diff
     is_alive     = state.is_alive
-    now          = System.monotonic_time(:millisecond)
     state = case is_late do
       true -> %{state | last_missed_frame_at: now}
       false -> state
     end
+    Logger.info(inspect(state))
     cond do
       is_alive && is_late && state.missed_frame_count >= state.allowed_missing_frames ->
         send_to_frame_handlers(state.frame_handlers, state.network_name, state.frame_name)
@@ -66,10 +71,11 @@ defmodule Cantastic.ReceivedFrameWatcher do
 
   @impl true
   def handle_info({:handle_frame,  %Frame{reception_timestamp: reception_timestamp}}, state) do
-    case state.last_received_frame do
-      :a -> {:noreply, %{state | frame_b_received_at: reception_timestamp / 1000, last_received_frame: :b}}
-      :b -> {:noreply, %{state | frame_a_received_at: reception_timestamp / 1000, last_received_frame: :a}}
+    state = case state.last_received_frame do
+      :a -> %{state | frame_b_received_at: reception_timestamp / 1000, last_received_frame: :b}
+      :b -> %{state | frame_a_received_at: reception_timestamp / 1000, last_received_frame: :a}
     end
+      {:noreply, %{state | system_last_frame_received_at: System.monotonic_time(:millisecond)}}
   end
 
   defp send_to_frame_handlers(frame_handlers, network_name, frame_name) do
