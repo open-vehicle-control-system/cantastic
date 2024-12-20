@@ -158,9 +158,9 @@ defmodule Cantastic.Interface do
     with {:ok, socket}  <- :socket.open(@can_domain, @can_type, @can_protocol),
          {:ok, ifindex} <- :socket.ioctl(socket, :gifindex, charlist_interface),
          {:ok, address} <- socket_address(ifindex),
+         :ok            <- :socket.setopt_native(socket, {:socket, @can_domain}, @stamp_flags),
          :ok            <- :socket.bind(socket, %{:family => @can_domain, :addr => address})
     do
-      :socket.setopt_native(socket, {:socket, @can_domain}, @stamp_flags)
       {:ok, socket}
     else
       {:error, :enodev} -> {:error, "CAN interface not found by libsocketcan. Make sure it is configured and enabled first with '$ ip link show'"}
