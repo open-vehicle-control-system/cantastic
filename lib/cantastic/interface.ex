@@ -5,7 +5,7 @@ defmodule Cantastic.Interface do
   @can_domain 29
   @can_protocol 1
   @can_type :raw
-  @stamp_flags 0x89b0 # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
+  @stamp_flags 0x8906 # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
 
   def configure_children() do
     interface_specs = ConfigurationStore.networks() |> Enum.map(fn (network) ->
