@@ -29,9 +29,9 @@ defmodule Cantastic.Signal do
   end
 
   def build_raw_decimal(signal_specification, value) do
-    scaled    = value |> D.div(signal_specification.scale)
-    offsetted = scaled |> D.sub(signal_specification.offset)
-    int       = offsetted |> D.round() |> D.to_integer()
+    offsetted = value |> D.sub(signal_specification.offset)
+    scaled    = offsetted |> D.div(signal_specification.scale)
+    int       = scaled |> D.round() |> D.to_integer()
     case signal_specification.endianness do
       "little" ->
         <<int::little-integer-size(signal_specification.value_length)>>
