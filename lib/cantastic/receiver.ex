@@ -3,6 +3,8 @@ defmodule Cantastic.Receiver do
   alias Cantastic.{Frame, Interface, ConfigurationStore, ReceivedFrameWatcher}
   require Logger
 
+  @id_mask 0x1FFFFFFF
+
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
   end
@@ -40,13 +42,14 @@ defmodule Cantastic.Receiver do
     reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec
 
     <<
-      id::little-integer-size(16),
-      _unused1::binary-size(2),
+      id_and_flags::little-integer-size(32),
       byte_number::little-integer-size(8),
       _unused2::binary-size(3),
       raw_data::binary-size(byte_number),
       _unused3::binary
     >> = raw_frame
+    id = Bitwise.band(id_and_flags, @id_mask)
+
     frame = %Frame{
       id: id,
       network_name: network_name,
