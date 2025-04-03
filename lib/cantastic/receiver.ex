@@ -35,10 +35,17 @@ defmodule Cantastic.Receiver do
   end
 
   defp receive_one_frame(network_name, socket) do
-    {:ok, %{
-      iov: [raw_frame],
-      ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-    }} = :socket.recvmsg(socket)
+    [raw_frame, timestamp_seconds, timestamp_usec] = case :socket.recvmsg(socket) do
+      {:ok, %{
+        iov: [raw_frame],
+        ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+      }} -> [raw_frame, timestamp_seconds, timestamp_usec]
+      {:ok, %{
+        iov: [raw_frame],
+        ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+      }} -> [raw_frame, timestamp_seconds, timestamp_usec]
+    end
+
     reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec
 
     <<
