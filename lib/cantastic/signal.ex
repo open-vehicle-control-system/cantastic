@@ -32,11 +32,15 @@ defmodule Cantastic.Signal do
     offsetted = value |> D.sub(signal_specification.offset)
     scaled    = offsetted |> D.div(signal_specification.scale)
     int       = scaled |> D.round() |> D.to_integer()
-    case signal_specification.endianness do
-      "little" ->
-        <<int::little-integer-size(signal_specification.value_length)>>
-      "big"    ->
-        <<int::big-integer-size(signal_specification.value_length)>>
+    case {signal_specification.endianness, signal_specification.sign} do
+      {"little", "signed"} ->
+        <<int::little-signed-integer-size(signal_specification.value_length)>>
+      {"little", "unsigned"} ->
+        <<int::little-unsigned-integer-size(signal_specification.value_length)>>
+      {"big", "signed"} ->
+        <<int::big-signed-integer-size(signal_specification.value_length)>>
+      {"big", "unsigned"} ->
+        <<int::big-unsigned-integer-size(signal_specification.value_length)>>
     end
   end
 
