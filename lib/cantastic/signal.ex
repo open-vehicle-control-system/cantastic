@@ -5,6 +5,7 @@ defmodule Cantastic.Signal do
     :name,
     :frame_name,
     :value,
+    :raw_value,
     :unit,
     :kind
   ]
@@ -69,7 +70,7 @@ defmodule Cantastic.Signal do
         "enum" ->
           signal_specification.mapping[raw_value]
       end
-      {:ok, %{signal | value: value}}
+      {:ok, %{signal | value: value, raw_value: raw_value}}
     rescue
       error in MatchError ->
         {:error, error}

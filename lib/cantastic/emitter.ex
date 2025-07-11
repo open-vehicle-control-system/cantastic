@@ -100,8 +100,9 @@ defmodule Cantastic.Emitter do
 
   Returns `:ok`.
   """
-  def send_frame(emitter) do
-    Process.send_after(emitter, :send_frame, 0)
+  def send_frame(network_name, frame_name) do
+    emitter = Interface.emitter_process_name(network_name, frame_name)
+    Process.send(emitter, :send_frame, [])
   end
 
   def get(emitter, fun, timeout \\ 5000) when is_function(fun, 1) do
