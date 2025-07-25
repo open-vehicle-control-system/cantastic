@@ -2,8 +2,8 @@ defmodule Cantastic.Interface do
   alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher, Util}
   require Logger
 
-  @can_domain 29
-  @can_protocol 1
+  @can_domain 29 # PF_CAN == AF_CAN
+  @can_protocol 1 # CAN_RAW
   @can_type :raw
   @stamp_flags 0x8906 # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
 
