@@ -1,4 +1,5 @@
 defmodule Cantastic.Socket do
+  import Bitwise
   require Logger
 
   # Source: https://github.com/linux-can/linux/blob/56cfd2507d3e720f4b1dbf9513e00680516a0826/include/linux/socket.h#L193
@@ -26,50 +27,33 @@ defmodule Cantastic.Socket do
 
   # Source: https://github.com/linux-can/can-utils/blob/6b46063eee805e0e680833da02fc16f15b92bf1e/include/linux/can/isotp.h#L125
   @can_isotp_tx_padding 0x0004
-  @flags @can_isotp_tx_padding
 
-  # Source: https://docs.kernel.org/networking/iso15765-2.html#iso-tp-socket-options
-  @can_isotp_options <<@flags::size(32)-little, 0::size(32)-little, 0::size(8)-little, 0::size(8)-little, 0::size(8)-little, 0::size(8)-little>>
-
+  # Source: https://github.com/torvalds/linux/blob/0cc53520e68bea7fb80fdc6bdf8d226d1b6a98d9/include/uapi/linux/sockios.h#L153
+  @timestamp_flags 0x8906 # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
 
   @sending_timeout 100
 
-  @stamp_flags 0x8906 # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
-
   def bind_raw(interface) do
-    bind(interface, :raw, 0, 0)
-  end
-
-  def bind_isotp(interface, request_frame_id, response_frame_id) do
-    bind(interface, :isotp, request_frame_id, response_frame_id)
-  end
-
-  defp bind(interface, protocol, request_frame_id, response_frame_id) do
-    charlist_interface = interface |> String.to_charlist()
-    with {:ok, socket}  <- :socket.open(@protocol_family, @protocol_types[protocol], @protocols[protocol]),
-         {:ok, ifindex} <- :socket.ioctl(socket, :gifindex, charlist_interface),
-         {:ok, address} <- build_raw_address(ifindex, request_frame_id, response_frame_id),
-         :ok            <- :socket.setopt_native(socket, {:socket, @protocol_family}, @stamp_flags),
-         :ok            <- :socket.setopt_native(socket, {@sol_can_isotp, @can_isotp_opts}, @can_isotp_options), # TODO: apply only to isotp OBD sockets
-         :ok            <- :socket.bind(socket, %{:family => @protocol_family, :addr => address})
+    with {:ok, socket} <- open(:raw),
+          :ok          <- request_hardware_timestamping(socket),
+         {:ok, socket} <- bind(socket, interface)
     do
       {:ok, socket}
     else
-      {:error, :enodev} -> {:error, "CAN interface not found by libsocketcan. Make sure it is configured and enabled first with '$ ip link show'"}
       {:error, error} -> {:error, error}
     end
   end
 
-  defp build_raw_address(ifindex, request_frame_id, response_frame_id) do
-    # Source: https://elixirforum.com/t/erlang-socket-module-for-socketcan-on-nerves-device/57294/6
-    address = <<
-      0::size(16)-little,
-      ifindex::size(32)-little,
-      response_frame_id::size(32)-little,
-      request_frame_id::size(32)-little,
-      0::size(64)
-    >>
-    {:ok, address}
+  def bind_isotp(interface, request_frame_id, response_frame_id, tx_padding \\ nil) do
+    with {:ok, socket} <- open(:isotp),
+         :ok           <- request_hardware_timestamping(socket),
+         :ok           <- request_isotp_padding(socket, tx_padding),
+         {:ok, socket} <- bind(socket, interface, request_frame_id, response_frame_id)
+    do
+      {:ok, socket}
+    else
+      {:error, error} -> {:error, error}
+    end
   end
 
   def send(socket, raw) do
@@ -91,7 +75,63 @@ defmodule Cantastic.Socket do
       }} -> [raw, timestamp_seconds, timestamp_usec]
     end
 
-    reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec
+    reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec # TODO return timestamp
     {:ok, raw}
+  end
+
+  defp bind(socket, interface, request_frame_id \\ 0, response_frame_id \\ 0) do
+    with {:ok, address} <- build_raw_address(socket, interface, request_frame_id, response_frame_id),
+         :ok            <- :socket.bind(socket, %{:family => @protocol_family, :addr => address})
+    do
+      {:ok, socket}
+    else
+      {:error, :enodev} -> {:error, "CAN interface not found by libsocketcan. Make sure it is configured and enabled first with '$ ip link show'"}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp open(protocol) do
+    :socket.open(@protocol_family, @protocol_types[protocol], @protocols[protocol])
+  end
+
+  defp request_hardware_timestamping(socket) do
+    :socket.setopt_native(socket, {:socket, @protocol_family}, @timestamp_flags)
+  end
+
+  defp request_isotp_padding(socket, tx_padding) do
+    # Source: https://docs.kernel.org/networking/iso15765-2.html#iso-tp-socket-options
+    case tx_padding do
+      nil ->
+        :ok
+      _ ->
+        flags          = @can_isotp_tx_padding
+        iso_tp_options = <<
+          flags::size(32)-little,
+          0::size(32)-little,
+          0::size(8)-little,
+          tx_padding::size(8)-little,
+          0::size(8)-little,
+          0::size(8)-little
+        >>
+        :socket.setopt_native(socket, {@sol_can_isotp, @can_isotp_opts}, iso_tp_options)
+    end
+
+  end
+
+  defp build_raw_address(socket, interface, request_frame_id, response_frame_id) do
+    charlist_interface = interface |> String.to_charlist()
+    case :socket.ioctl(socket, :gifindex, charlist_interface) do
+      {:ok, ifindex} ->
+        # Source: https://elixirforum.com/t/erlang-socket-module-for-socketcan-on-nerves-device/57294/6
+        address = <<
+          0::size(16)-little,
+          ifindex::size(32)-little,
+          response_frame_id::size(32)-little,
+          request_frame_id::size(32)-little,
+          0::size(64)
+        >>
+        {:ok, address}
+      {:error, error} -> {:error, error}
+    end
   end
 end
