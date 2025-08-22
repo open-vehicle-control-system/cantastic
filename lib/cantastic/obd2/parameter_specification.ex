@@ -9,6 +9,7 @@ defmodule Cantastic.OBD2.ParameterSpecification do
 
   defstruct [
     :name,
+    :id,
     :kind,
     :precision,
     :network_name,
@@ -25,11 +26,11 @@ defmodule Cantastic.OBD2.ParameterSpecification do
     validate_keys!(network_name, request_name, yaml_parameter_specification)
 
     value_length         =
-    parameter_specification = %Cantastic.SignalSpecification{
+    parameter_specification = %__MODULE__{
       name: yaml_parameter_specification.name,
-      id: yaml_parameter_specification.name.id,
+      id: yaml_parameter_specification.id,
       network_name: network_name,
-      request_name: frame_name,
+      request_name: request_name,
       kind: yaml_parameter_specification[:kind] || "decimal",
       precision: yaml_parameter_specification[:precision] || 2,
       sign: yaml_parameter_specification[:sign] || "unsigned",

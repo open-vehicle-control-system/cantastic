@@ -1,8 +1,14 @@
 defmodule Cantastic.Parameter do
   alias Decimal, as: D
 
+  defdelegate fetch(term, key), to: Map
+  defdelegate get(term, key, default), to: Map
+  defdelegate get_and_update(term, key, fun), to: Map
+  defdelegate pop(term, key), to: Map
+
   defstruct [
     :name,
+    :id,
     :request_name,
     :kind,
     :value,
@@ -14,17 +20,17 @@ defmodule Cantastic.Parameter do
     "[OBD2 Parameter] #{parameter.request_name}.#{parameter.name} = #{parameter.value}"
   end
 
-  def interpret(frame, parameter_specification) do
+  def interpret(raw_parameters, parameter_specification) do
     parameter = %__MODULE__{
       name: parameter_specification.name,
+      id: parameter_specification.id,
       request_name: parameter_specification.request_name,
       kind: parameter_specification.kind,
       unit: parameter_specification.unit
     }
-
-    {:ok, raw_value, value_length} = extract_raw_value(frame.raw_data, parameter_specification)
-
     try do
+      value_length = parameter_specification.value_length
+      <<parameter.id::integer-size(8), raw_value::bitstring-size(value_length), truncated_raw_parameters::bitstring>> = raw_parameters
       decimal = interpret_decimal(raw_value, parameter_specification, value_length) |> D.round(parameter_specification.precision)
       value   = case parameter_specification.kind do
         "decimal" ->
@@ -32,7 +38,7 @@ defmodule Cantastic.Parameter do
         "integer" ->
           decimal |> D.to_integer()
       end
-      {:ok, %{parameter | value: value, raw_value: raw_value}}
+      {:ok, %{parameter | value: value, raw_value: raw_value}, truncated_raw_parameters}
     rescue
       error in MatchError ->
         {:error, error}
@@ -55,25 +61,5 @@ defmodule Cantastic.Parameter do
         val
     end
     D.new(int) |> D.mult(parameter_specification.scale) |> D.add(parameter_specification.offset)
-  end
-
-  defp extract_raw_value(raw_data, parameter_specification) do
-    case parameter_specification.value_start do
-      value_start when is_integer(value_start) ->
-        raw_value = extract_segment(raw_data, value_start, parameter_specification.value_length)
-        {:ok, raw_value, parameter_specification.value_length}
-      ranges ->
-        {raw_value, value_length} = ranges
-          |> Enum.reduce({<<>>, 0}, fn(range, {value_accumulator, value_length_accumulator}) ->
-            partial_raw_value = extract_segment(raw_data, range.start, range.length)
-            {<<partial_raw_value::bitstring, value_accumulator::bitstring>>, value_length_accumulator + range.length}
-          end)
-          {:ok, raw_value, value_length}
-    end
-  end
-
-  defp extract_segment(raw_data, head_length, value_length) do
-    <<_head::bitstring-size(head_length), segment::bitstring-size(value_length), _tail::bitstring>> = raw_data
-    segment
   end
 end

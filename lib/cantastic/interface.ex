@@ -1,11 +1,6 @@
 defmodule Cantastic.Interface do
-  alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher, Util}
+  alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher, Util, OBD2}
   require Logger
-
-  @can_domain 29 # PF_CAN == AF_CAN
-  @can_protocol 1 # CAN_RAW
-  @can_type :raw
-  @stamp_flags 0x8906 # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
 
   def configure_children() do
     interface_specs = ConfigurationStore.networks() |> Enum.map(fn (network) ->
@@ -20,7 +15,8 @@ defmodule Cantastic.Interface do
 
     receivers_and_watchers = configure_receivers_and_watchers(interface_specs)
     emitters               = configure_emitters(interface_specs)
-    receivers_and_watchers ++ emitters
+    obd2_requests          = configure_obd2_requests(interface_specs)
+    receivers_and_watchers ++ emitters ++ obd2_requests
   end
 
   def configure_receivers_and_watchers(interface_specs) do
@@ -66,6 +62,22 @@ defmodule Cantastic.Interface do
     |> List.flatten
   end
 
+  def configure_obd2_requests(interface_specs) do
+    interface_specs
+    |> Enum.map(fn (%{network_name: network_name, network_config: network_config, socket: _socket}) ->
+      (network_config[:obd2_requests] || [])
+      |> Enum.map(fn({_frame_id, yaml_request_specification}) ->
+        request_specification = OBD2.RequestSpecification.from_yaml(yaml_request_specification)
+        arguments = %{
+          process_name: obd2_request_process_name(network_name, request_specification.name),
+          request_specification: request_specification
+        }
+        Supervisor.child_spec({OBD2.Request, arguments}, id: arguments.process_name)
+      end)
+    end)
+    |> List.flatten
+  end
+
   defp process_name_prefix(network_name) do
     network_name = network_name |> Atom.to_string()
     "Cantastic#{network_name |> Macro.camelize()}"
@@ -79,13 +91,17 @@ defmodule Cantastic.Interface do
     "#{process_name_prefix(network_name)}#{frame_name |> Macro.camelize()}Emitter" |> String.to_atom
   end
 
+  def obd2_request_process_name(network_name, request_name) do
+    "#{process_name_prefix(network_name)}#{request_name |> Macro.camelize()}OBD2Request" |> String.to_atom
+  end
+
   def received_frame_watcher_process_name(network_name, frame_name) do
     "#{process_name_prefix(network_name)}#{frame_name |> Macro.camelize()}ReceivedFrameWatcher" |> String.to_atom
   end
 
   defp initialize_socket(interface, bitrate, setup_can_interfaces) do
     case setup_can_interface(interface, bitrate, setup_can_interfaces) do
-      :ok -> bind_socket(interface)
+      :ok -> Socket.bind_raw(interface)
     end
   end
 
@@ -151,25 +167,5 @@ defmodule Cantastic.Interface do
         :timer.sleep(500)
         setup_can_interface(interface, bitrate, setup_can_interfaces, retry_number + 1)
     end
-  end
-
-  defp bind_socket(interface) do
-    charlist_interface = interface |> String.to_charlist()
-    with {:ok, socket}  <- :socket.open(@can_domain, @can_type, @can_protocol),
-         {:ok, ifindex} <- :socket.ioctl(socket, :gifindex, charlist_interface),
-         {:ok, address} <- socket_address(ifindex),
-         :ok            <- :socket.setopt_native(socket, {:socket, @can_domain}, @stamp_flags),
-         :ok            <- :socket.bind(socket, %{:family => @can_domain, :addr => address})
-    do
-      {:ok, socket}
-    else
-      {:error, :enodev} -> {:error, "CAN interface not found by libsocketcan. Make sure it is configured and enabled first with '$ ip link show'"}
-      {:error, error} -> {:error, error}
-    end
-  end
-
-  defp socket_address(ifindex) do
-    address = <<0::size(16)-little, ifindex::size(32)-little, 0::size(32), 0::size(32), 0::size(64)>>
-    {:ok, address}
   end
 end
