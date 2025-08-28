@@ -1,4 +1,4 @@
-defmodule Cantastic.Parameter do
+defmodule Cantastic.OBD2.Parameter do
   alias Decimal, as: D
 
   defdelegate fetch(term, key), to: Map
@@ -30,7 +30,8 @@ defmodule Cantastic.Parameter do
     }
     try do
       value_length = parameter_specification.value_length
-      <<parameter.id::integer-size(8), raw_value::bitstring-size(value_length), truncated_raw_parameters::bitstring>> = raw_parameters
+      id           = parameter.id
+      <<^id::integer-size(8), raw_value::bitstring-size(value_length), truncated_raw_parameters::bitstring>> = raw_parameters
       decimal = interpret_decimal(raw_value, parameter_specification, value_length) |> D.round(parameter_specification.precision)
       value   = case parameter_specification.kind do
         "decimal" ->

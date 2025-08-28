@@ -1,5 +1,6 @@
 defmodule Cantastic.OBD2.RequestSpecification do
-  alias Cantastic.OBD2.ParametersSpecification
+  alias Cantastic.OBD2.ParameterSpecification
+
   @behaviour Access
 
   defdelegate fetch(term, key), to: Map
@@ -21,11 +22,10 @@ defmodule Cantastic.OBD2.RequestSpecification do
 
   def from_yaml(network_name, can_interface, yaml_obd2_request_specification) do
     validate_keys!(network_name, yaml_obd2_request_specification)
-    request_name                    = yaml_obd2_request_specification.name
     yaml_parameter_specifications   = yaml_obd2_request_specification[:parameters] || []
     {:ok, parameter_specifications} = parameter_specifications(network_name, yaml_obd2_request_specification.name, yaml_parameter_specifications)
-    data_length                     = validate_parameter_specifications!(network_name, request_name, parameter_specifications)
-    request_specification           = %Cantastic.RequestSpecification{
+    validate_parameter_specifications!(parameter_specifications)
+    request_specification           = %__MODULE__{
       name: yaml_obd2_request_specification.name,
       request_frame_id: yaml_obd2_request_specification.request_frame_id,
       response_frame_id: yaml_obd2_request_specification.response_frame_id,
@@ -34,8 +34,8 @@ defmodule Cantastic.OBD2.RequestSpecification do
       parameter_specifications: parameter_specifications,
       can_interface: can_interface
     }
-    validate_specification!(frame_specification)
-    {:ok, frame_specification}
+    validate_specification!(request_specification)
+    {:ok, request_specification}
   end
 
   defp validate_keys!(network_name, yaml_obd2_request_specification) do
@@ -43,7 +43,6 @@ defmodule Cantastic.OBD2.RequestSpecification do
     invalid_keys = MapSet.difference(MapSet.new(defined_keys), MapSet.new(@authorized_yaml_keys)) |> MapSet.to_list()
     if invalid_keys != [] do
       throw "[Yaml configuration error] OBD2 Request '#{network_name}.#{yaml_obd2_request_specification.name}' is defining invalid key: #{invalid_keys |> Enum.join(", ")}"
-
     end
   end
 
@@ -59,7 +58,7 @@ defmodule Cantastic.OBD2.RequestSpecification do
     end
   end
 
-  defp parameter_specifications(network_name, frame_name, yaml_parameter_specifications) do
+  defp parameter_specifications(network_name, request_name, yaml_parameter_specifications) do
     computed = yaml_parameter_specifications
     |> Enum.map(fn (yaml_parameter_specification) ->
       {:ok, parameter_specification} = ParameterSpecification.from_yaml(network_name, request_name, yaml_parameter_specification)
@@ -69,7 +68,7 @@ defmodule Cantastic.OBD2.RequestSpecification do
   end
 
 
-  defp validate_parameter_specifications!(network_name, request_name, parameter_specifications) do
+  defp validate_parameter_specifications!(parameter_specifications) do
     parameter_specifications |> Enum.each(fn(parameter_specification) ->
       ParameterSpecification.validate_specification!(parameter_specification)
     end)

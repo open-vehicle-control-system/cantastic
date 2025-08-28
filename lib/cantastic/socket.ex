@@ -1,6 +1,6 @@
 defmodule Cantastic.Socket do
-  import Bitwise
   require Logger
+  alias Cantastic.SocketMessage
 
   # Source: https://github.com/linux-can/linux/blob/56cfd2507d3e720f4b1dbf9513e00680516a0826/include/linux/socket.h#L193
   @protocol_family 29 # PF_CAN == AF_CAN
@@ -76,7 +76,8 @@ defmodule Cantastic.Socket do
     end
 
     reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec # TODO return timestamp
-    {:ok, raw}
+    message = %SocketMessage{raw: raw, reception_timestamp: reception_timestamp}
+    {:ok, message}
   end
 
   defp bind(socket, interface, request_frame_id \\ 0, response_frame_id \\ 0) do

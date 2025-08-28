@@ -6,9 +6,7 @@ defmodule Cantastic.Emitter do
 
   """
   use GenServer
-  alias Cantastic.{Interface, Frame}
-
-  @sending_timeout 100
+  alias Cantastic.{Interface, Frame, Socket}
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -206,7 +204,7 @@ defmodule Cantastic.Emitter do
   end
 
   defp send_raw(state, raw_frame) do
-    case :socket.send(state.socket, raw_frame, @sending_timeout) do
+    case Socket.send(state.socket, raw_frame) do
       :ok -> state
       {:error, reason} -> %{state | failed_sending_count: state.failed_sending_count + 1, last_sending_error_reason: reason}
     end

@@ -1,5 +1,5 @@
 defmodule Cantastic.Interface do
-  alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher, Util, OBD2}
+  alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher, Socket, Util, OBD2}
   require Logger
 
   def configure_children() do
@@ -9,7 +9,8 @@ defmodule Cantastic.Interface do
       %{
         network_name: network.network_name,
         network_config: network.network_config,
-        socket: socket
+        socket: socket,
+        interface: network.interface
       }
     end)
 
@@ -64,10 +65,10 @@ defmodule Cantastic.Interface do
 
   def configure_obd2_requests(interface_specs) do
     interface_specs
-    |> Enum.map(fn (%{network_name: network_name, network_config: network_config, socket: _socket}) ->
+    |> Enum.map(fn (%{network_name: network_name, network_config: network_config, interface: interface, socket: _socket}) ->
       (network_config[:obd2_requests] || [])
-      |> Enum.map(fn({_frame_id, yaml_request_specification}) ->
-        request_specification = OBD2.RequestSpecification.from_yaml(yaml_request_specification)
+      |> Enum.map(fn(yaml_request_specification) ->
+        {:ok, request_specification} = OBD2.RequestSpecification.from_yaml(network_name, interface, yaml_request_specification)
         arguments = %{
           process_name: obd2_request_process_name(network_name, request_specification.name),
           request_specification: request_specification

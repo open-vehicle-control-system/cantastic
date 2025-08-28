@@ -1,5 +1,4 @@
 defmodule Cantastic.OBD2.ParameterSpecification do
-  alias Cantastic.Util
   alias Decimal, as: D
 
   @valid_kinds ["decimal", "integer"]
@@ -25,7 +24,6 @@ defmodule Cantastic.OBD2.ParameterSpecification do
   def from_yaml(network_name, request_name, yaml_parameter_specification) do
     validate_keys!(network_name, request_name, yaml_parameter_specification)
 
-    value_length         =
     parameter_specification = %__MODULE__{
       name: yaml_parameter_specification.name,
       id: yaml_parameter_specification.id,
@@ -43,7 +41,7 @@ defmodule Cantastic.OBD2.ParameterSpecification do
     {:ok, parameter_specification}
   end
 
-  defp validate_keys!(network_name, frame_name, yaml_parameter_specification) do
+  defp validate_keys!(network_name, request_name, yaml_parameter_specification) do
     defined_keys = Map.keys(yaml_parameter_specification)
     invalid_keys = MapSet.difference(MapSet.new(defined_keys), MapSet.new(@authorized_yaml_keys)) |> MapSet.to_list()
     if invalid_keys != [] do

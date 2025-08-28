@@ -1,6 +1,6 @@
 defmodule Cantastic.Receiver do
   use GenServer
-  alias Cantastic.{Frame, Interface, ConfigurationStore, ReceivedFrameWatcher}
+  alias Cantastic.{Frame, Interface, ConfigurationStore, ReceivedFrameWatcher, Socket}
   require Logger
 
   @id_mask 0x1FFFFFFF
@@ -35,26 +35,14 @@ defmodule Cantastic.Receiver do
   end
 
   defp receive_one_frame(network_name, socket) do
-    [raw_frame, timestamp_seconds, timestamp_usec] = case :socket.recvmsg(socket) do
-      {:ok, %{
-        iov: [raw_frame],
-        ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-      }} -> [raw_frame, timestamp_seconds, timestamp_usec]
-      {:ok, %{
-        iov: [raw_frame],
-        ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-      }} -> [raw_frame, timestamp_seconds, timestamp_usec]
-    end
-
-    reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec
-
+    {:ok, socket_message} = Socket.receive_message(socket)
     <<
       id_and_flags::little-integer-size(32),
       byte_number::little-integer-size(8),
       _unused2::binary-size(3),
       raw_data::binary-size(byte_number),
       _unused3::binary
-    >> = raw_frame
+    >> = socket_message.raw
     id = Bitwise.band(id_and_flags, @id_mask)
 
     frame = %Frame{
@@ -63,7 +51,7 @@ defmodule Cantastic.Receiver do
       byte_number: byte_number,
       raw_data: raw_data,
       created_at: DateTime.utc_now(),
-      reception_timestamp: reception_timestamp
+      reception_timestamp: socket_message.reception_timestamp
     }
     {:ok, frame}
   end

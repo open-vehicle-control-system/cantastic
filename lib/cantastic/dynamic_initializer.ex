@@ -21,5 +21,4 @@ defmodule Cantastic.DynamicInitializer do
       {:ok, _child} = DynamicSupervisor.start_child(Cantastic.DynamicSupervisor, child_spec)
     end)
   end
-
 end
