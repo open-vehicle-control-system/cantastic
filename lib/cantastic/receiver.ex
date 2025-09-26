@@ -1,4 +1,8 @@
 defmodule Cantastic.Receiver do
+  @moduledoc """
+    `Cantastic.Receiver` is a `GenServer` spawned per CAN network. It will then send the received `Cantastic.Frame` to all processes that subscribed to them.
+  """
+
   use GenServer
   alias Cantastic.{Frame, Interface, ConfigurationStore, ReceivedFrameWatcher, Socket}
   require Logger
@@ -72,6 +76,7 @@ defmodule Cantastic.Receiver do
     {:noreply, state}
   end
 
+  @doc false
   def find_frame_specification_by_name(frame_specifications, frame_name) do
     case frame_specifications |> Enum.find(fn ({_frame_id, f}) -> f.name == frame_name end) do
       {_frame_id, frame_specification} -> {:ok, frame_specification}
@@ -92,6 +97,22 @@ defmodule Cantastic.Receiver do
     Process.send_after(self(), :receive_frame, delay)
   end
 
+  @doc """
+  Subscribe `frame_handler :: pid()` to all frames received on a CAN network.
+
+  Passing `%{errors: true}` as `opt` will also subscribe the `frame_handler` to `handle_missing_frame` events that are triggered when the related frames are not received during the expected timeframe on the CAN network. (see also `Cantastic.ReceivedFrameWatcher`)
+
+  Returns `:ok`.
+
+  ## Example
+
+      iex> Cantastic.Receiver.subscribe(self(), :my_network)
+      :ok
+
+      iex> Cantastic.Receiver.subscribe(self(), :my_network, %{errors: true})
+      :ok
+
+  """
   def subscribe(frame_handler, opts \\ %{errors: false}) do
     ConfigurationStore.networks()|> Enum.each(fn (network) ->
       receiver =  Interface.receiver_process_name(network.network_name)
@@ -99,6 +120,25 @@ defmodule Cantastic.Receiver do
     end)
   end
 
+  @doc """
+  Subscribe `frame_handler :: pid()` to one or multiple frames.
+
+  Passing `%{errors: true}` as `opt` will also subscribe the `frame_handler` to `handle_missing_frame` events that are triggered when the related frames are not received during the expected timeframe on the CAN network. (see also `Cantastic.ReceivedFrameWatcher`)
+
+  Returns `:ok`.
+
+  ## Example
+
+      iex> Cantastic.Receiver.subscribe(self(), :my_netowrk, "inverter_status")
+      :ok
+
+      iex> Cantastic.Receiver.subscribe(self(), :my_netowrk, "inverter_status", %{errors: true})
+      :ok
+
+      iex> Cantastic.Receiver.subscribe(self(), :my_netowrk, ["inverter_status", "inverter_temperatures"])
+      :ok
+
+  """
   def subscribe(frame_handler, network_name, frame_names, opts \\ %{errors: false})
   def subscribe(frame_handler, network_name, frame_names, opts) when is_list(frame_names) do
     receiver =  Interface.receiver_process_name(network_name)
@@ -108,6 +148,7 @@ defmodule Cantastic.Receiver do
     subscribe(frame_handler, network_name, [frame_names], opts)
   end
 
+  @doc false
   def frame_names(state) do
     state.frame_specifications |> Enum.map(fn({_frame_id, frame_specification}) ->
       frame_specification.name

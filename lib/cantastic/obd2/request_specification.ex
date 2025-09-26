@@ -1,4 +1,6 @@
 defmodule Cantastic.OBD2.RequestSpecification do
+  @moduledoc false
+
   alias Cantastic.OBD2.ParameterSpecification
 
   @behaviour Access

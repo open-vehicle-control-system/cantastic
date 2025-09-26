@@ -1,4 +1,6 @@
 defmodule Cantastic.OBD2.ParameterSpecification do
+  @moduledoc false
+
   alias Decimal, as: D
 
   @valid_kinds ["decimal", "integer"]

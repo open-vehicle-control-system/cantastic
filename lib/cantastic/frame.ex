@@ -1,4 +1,21 @@
 defmodule Cantastic.Frame do
+  @moduledoc """
+    `Cantastic.Frame` is a `Struct` used to represent one CAN frame.
+
+    You will receive this `Struct` fom `Cantastic.Receiver` each time a frame is received on the CAN network.
+
+    The attributes are the following:
+
+    * `:id` The frame id (`Integer`).
+    * `:name` The frame name.
+    * `:byte_number` The number of data bytes in this frame.
+    * `:raw_data` The raw bytes received on the CAN network.
+    * `:network_name` The name of the CAN network as defined in your YAML file.
+    * `:created_at` The `DateTime` at which the   `Struct` has been created in OTP.
+    * `:reception_timestamp`  The `DateTime` at which the frame was received by the kernel.
+    * `:signals` A `Map` of the signals contained in this frame.
+  """
+
   alias Cantastic.{Util, Signal, FrameSpecification}
   alias Decimal, as: D
 
@@ -13,6 +30,7 @@ defmodule Cantastic.Frame do
     signals: %{}
   ]
 
+  @doc false
   def build_raw(frame_specification, parameters) do
     {:ok, raw_data} = build_raw_data(frame_specification, parameters)
     frame = %__MODULE__{
@@ -25,6 +43,7 @@ defmodule Cantastic.Frame do
     {:ok, to_raw(frame)}
   end
 
+  @doc false
   defp build_raw_data(frame_specification, parameters) do
     raw_data = frame_specification.signal_specifications
     |> Enum.reduce(<<>>, fn (signal_specification, raw_data) ->
@@ -37,6 +56,7 @@ defmodule Cantastic.Frame do
     {:ok, raw_data}
   end
 
+  @doc false
   defp include_checksum_if_required(raw_data, %FrameSpecification{checksum_required: false}, _), do: raw_data
   defp include_checksum_if_required(raw_data, frame_specification, parameters) do
     checksum               = parameters[frame_specification.checksum_signal_specification.name].(raw_data)
@@ -47,6 +67,7 @@ defmodule Cantastic.Frame do
     <<head::bitstring, raw_checksum::bitstring, tail::bitstring>>
   end
 
+  @doc false
   def interpret(frame, frame_specification) do
     signals = frame_specification.signal_specifications |> Enum.reduce(%{}, fn(signal_specification, acc) ->
       {:ok, signal} =  Signal.interpret(frame, signal_specification)
@@ -56,14 +77,25 @@ defmodule Cantastic.Frame do
     {:ok, frame}
   end
 
+  @doc """
+  Returns a `String` representation of the frame, used for debugging.
+
+  ## Example
+
+      iex> Cantastic.Frame.to_string(frame)
+      "[Frame] my_network - 0x7A1 3 00 AA BB"
+
+  """
   def to_string(frame) do
     "[Frame] #{frame.network_name} - #{format_id(frame)}  [#{frame.byte_number}]  #{format_data(frame)}"
   end
 
+  @doc false
   def format_id(frame) do
     frame.id |> Util.integer_to_hex()
   end
 
+  @doc false
   def format_data(frame) do
     frame.raw_data
     |> Util.bin_to_hex()
@@ -72,6 +104,7 @@ defmodule Cantastic.Frame do
     |> Enum.join(" ")
   end
 
+  @doc false
   def to_raw(frame) do
     byte_number = frame.byte_number
     padding     = 8 - byte_number

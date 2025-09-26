@@ -1,4 +1,6 @@
 defmodule Cantastic.Util do
+  @moduledoc false
+
   def hex_to_bin(nil), do: nil
   def hex_to_bin(hex_data) do
     hex_data

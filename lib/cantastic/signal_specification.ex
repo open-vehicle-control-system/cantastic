@@ -1,4 +1,6 @@
 defmodule Cantastic.SignalSpecification do
+  @moduledoc false
+
   alias Cantastic.Util
   alias Decimal, as: D
 

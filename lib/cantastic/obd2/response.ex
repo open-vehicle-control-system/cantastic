@@ -1,6 +1,17 @@
 defmodule Cantastic.OBD2.Response do
   alias Cantastic.OBD2.Parameter
 
+  @moduledoc """
+    `Cantastic.OBD2.Response` is a `Struct` used to represent one OBD2 response.
+
+    The attributes are the following:
+
+    * `:request_name` The OBD2 request's name, as defined in your YAML file.
+    * `:mode` The OBD2 mode, as defined in your YAML file.
+    * `:reception_timestamp`  The `DateTime` at which the frame was received by the kernel.
+    * `:parameters` A `Map` of the parameters contained in this response.
+  """
+
   defstruct [
     :request_name,
     :mode,
@@ -8,6 +19,7 @@ defmodule Cantastic.OBD2.Response do
     parameters: %{}
   ]
 
+  @doc false
   def interpret(request_specification, socket_message) do
     <<mode::integer-size(8), raw_parameters::bitstring>> = socket_message.raw
     acc = %{raw_parameters: raw_parameters}

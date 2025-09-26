@@ -1,8 +1,20 @@
 defmodule Cantastic.Emitter do
   @moduledoc """
-    `Cantastic.Emitter` is a process used to emit frames at the frequency defined in your Yaml configuration file.
+    `Cantastic.Emitter` is a `GenServer` used to emit CAN frames at the frequency defined in your YAML configuration file.
 
-    There is one Emitter process started per frame to be emitted.
+    There is one Emitter process started per emitted frame on a CAN network.
+
+    Here is an example on how to configure a simple emitter and start emitting frames immediately:
+
+    ```
+    :ok = Emitter.configure(:network_name, "my_frame", %{
+      parameters_builder_function: :default,
+      initial_data: %{
+        "gear" => "drive"
+      },
+      enable: true
+    })
+    ```
 
   """
   use GenServer
@@ -97,6 +109,12 @@ defmodule Cantastic.Emitter do
   `configure/2` has to be called before the emitter can start emitting on the bus.
 
   Returns `:ok`.
+
+  ## Example
+
+      iex> Cantastic.Emitter.send_frame(:network_name, "my_frame")
+      :ok
+
   """
   def send_frame(network_name, frame_name) do
     emitter = Interface.emitter_process_name(network_name, frame_name)
@@ -108,18 +126,18 @@ defmodule Cantastic.Emitter do
   end
 
   @doc """
-  Update the emitter's state.
+  Update the emitter's data.
 
-  It allows you to modify the signal's values sent on the bus. Your function receive the `data` map and must return the updated version.
+  It allows you to modify the signal's values to sent on the bus. Your function receives the `data` map and must return the updated version.
 
   Returns: `:ok`
 
   ## Examples
 
-    iex> Cantastic.Emitter.update(:drive_can, "vms_status", fn(data) ->
-      %{data | gear: "parking"}
-    end)
-    :ok
+      iex> Cantastic.Emitter.update(:network_name, "my_frame", fn(data) ->
+        %{data | gear: "parking"}
+      end)
+      :ok
   """
   def update(network_name, frame_name, fun, timeout \\ 5000) when is_function(fun, 1) do
     emitter =  Interface.emitter_process_name(network_name, frame_name)
@@ -130,18 +148,37 @@ defmodule Cantastic.Emitter do
   Configure the emitter, it has to be called before `enable/2`.
 
   You must provide a `parameters_builder_function` that will be used by the emitter to compute the actual `Cantastic.Signal` value(s).
-  The function will receive the Emitter's `state` as a parameter and should return `{:ok, parameters, state}`, where `parameters` is a map containing a value for each signal of the emitter's frame.
-  The `initial_data` key allows you to provide some initial values for the emitter's `state.data`.
+
+  The function will receive the Emitter's `data` as a parameter and should return `{:ok, parameters, data}`, where `parameters` is a map containing a value for each signal of the emitter's frame.
+
+  If all you need is to send the current values stored in data, you can simply pass `:default` as parameters_builder_function, which is equivalent to `fn (data) -> {:ok, data, data}`.
+
+  You can start to emit immediately by setting the `enable` key to `true`.
+
+  The `initial_data` key allows you to provide the initial values.
 
   Returns: `:ok`
 
   ## Examples
 
-    iex> Cantastic.Emitter.configure(:drive_can, %{
-      parameters_builder_function: fn (data) -> {:ok, %{"counter" => data["counter"], "gear" => data["gear"]}, %{data | "counter" => data["counter"] + 1}} end,
-      initial_data: %{"counter" => 0, "gear" => "drive"}
-    })
-    :ok
+      iex> Cantastic.Emitter.configure(:network_name, %{
+        parameters_builder_function: fn (data) ->
+          {
+            :ok,
+            %{"counter" => data["counter"], "gear" => data["gear"]},
+            %{data | "counter" => data["counter"] + 1}
+          }
+        end,
+        initial_data: %{"counter" => 0, "gear" => "drive"}
+      })
+      :ok
+
+      iex> Cantastic.Emitter.configure(:network_name, %{
+        parameters_builder_function: :default,
+        initial_data: %{"gear" => "drive"},
+        enable: true
+      })
+      :ok
   """
   def configure(network_name, frame_name, initialization_args) do
     emitter =  Interface.emitter_process_name(network_name, frame_name)
@@ -155,11 +192,11 @@ defmodule Cantastic.Emitter do
 
   ## Examples
 
-    iex> Cantastic.Emitter.enable(:drive_can, "engine_status")
-    :ok
+      iex> Cantastic.Emitter.enable(:drive_can, "engine_status")
+      :ok
 
-    iex> Cantastic.Emitter.enable(:drive_can, ["engine_status", "throttle"])
-    :ok
+      iex> Cantastic.Emitter.enable(:drive_can, ["engine_status", "throttle"])
+      :ok
   """
   def enable(network_name, frame_names) when is_list(frame_names) do
     frame_names |> Enum.each(
@@ -180,11 +217,11 @@ defmodule Cantastic.Emitter do
 
   ## Examples
 
-    iex> Cantastic.Emitter.enable(:drive_can, "engine_status")
-    :ok
+      iex> Cantastic.Emitter.disable(:drive_can, "engine_status")
+      :ok
 
-    iex> Cantastic.Emitter.enable(:drive_can, ["engine_status", "throttle"])
-    :ok
+      iex> Cantastic.Emitter.disable(:drive_can, ["engine_status", "throttle"])
+      :ok
   """
   def disable(network_name, frame_names) when is_list(frame_names) do
     frame_names |> Enum.each(
@@ -198,6 +235,16 @@ defmodule Cantastic.Emitter do
     GenServer.cast(emitter, :disable)
   end
 
+  @doc """
+  Forward a frame to another CAN network
+
+  Returns: `:ok`
+
+  ## Examples
+
+      iex> Cantastic.Emitter.forward(:my_network, frame)
+      :ok
+  """
   def forward(network_name, frame) do
     emitter = Interface.emitter_process_name(network_name, frame.name)
     GenServer.cast(emitter, {:forward, frame})

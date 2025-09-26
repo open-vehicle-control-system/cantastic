@@ -1,4 +1,6 @@
 defmodule Cantastic.FrameSpecification do
+  @moduledoc false
+
   alias Cantastic.SignalSpecification
   @behaviour Access
 

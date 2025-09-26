@@ -1,4 +1,10 @@
 defmodule Cantastic.Socket do
+  @moduledoc """
+    `Cantastic.Socket` is a utility module allowing to interact with the libsocketcan Linux sockets.
+
+    If you do not want to use Cantastic's declarative way of defining frames, you could use this module to interact directly with the CAN Bus.
+  """
+
   require Logger
   alias Cantastic.SocketMessage
 
@@ -33,6 +39,16 @@ defmodule Cantastic.Socket do
 
   @sending_timeout 100
 
+  @doc """
+  Bind the CAN socket in RAW mode on the `interface`.
+
+  Returns: `{:ok, socket}`
+
+  ## Examples
+
+      iex> Cantastic.Socket.bind_raw("can0")
+      {:ok, socket}
+  """
   def bind_raw(interface) do
     with {:ok, socket} <- open(:raw),
           :ok          <- request_hardware_timestamping(socket),
@@ -44,6 +60,16 @@ defmodule Cantastic.Socket do
     end
   end
 
+  @doc """
+  Bind the CAN socket in ISOTP mode on the `interface`, you have to provide the  `request_frame_id`, `response_frame_id` and an optional  `tx_padding`.
+
+  Returns: `{:ok, socket}`
+
+  ## Examples
+
+      iex> Cantastic.Socket.bind_isotp("can0", 0x799, 0x771, 0x0)
+      {:ok, socket}
+  """
   def bind_isotp(interface, request_frame_id, response_frame_id, tx_padding \\ nil) do
     with {:ok, socket} <- open(:isotp),
          :ok           <- request_hardware_timestamping(socket),
@@ -56,6 +82,16 @@ defmodule Cantastic.Socket do
     end
   end
 
+  @doc """
+  Send one `raw` frame on the `socket`.
+
+  Returns: `:ok`
+
+  ## Examples
+
+      iex> Cantastic.Socket.send(socket, <<....>>)
+      :ok
+  """
   def send(socket, raw) do
     case :socket.send(socket, raw, @sending_timeout) do
       :ok -> :ok
@@ -63,6 +99,16 @@ defmodule Cantastic.Socket do
     end
   end
 
+  @doc """
+  Receive one `message` frame on the `socket`. This function will block indefinitely until a message is received.
+
+  Returns: `{:ok, %Cantastic.SocketMessage{} = message}`
+
+  ## Examples
+
+      iex> Cantastic.Socket.receive_message(socket)
+      {:ok, %Cantastic.SocketMessage{} = message}
+  """
   def receive_message(socket) do
     [raw, timestamp_seconds, timestamp_usec] = case :socket.recvmsg(socket) do
       {:ok, %{

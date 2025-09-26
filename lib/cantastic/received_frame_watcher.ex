@@ -1,7 +1,10 @@
 defmodule Cantastic.ReceivedFrameWatcher do
+  @moduledoc """
+    `Cantastic.ReceivedFrameWatcher` is a `GenServer` spawned per received frame. It will then send `handle_missing_frame` events to all processes that subscribed to them.
+  """
+
   use GenServer
   alias Cantastic.{Frame, Interface}
-
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -114,6 +117,21 @@ defmodule Cantastic.ReceivedFrameWatcher do
       {:reply, {:ok, state.is_alive}, state}
   end
 
+  @doc """
+  Subscribe `frame_handler :: pid()` to one or multiple frame reception errors.
+
+  `frame_handler` will then receive `{:handle_missing_frame, network_name, frame_name}` messages each time a frame is not received during the timeframe defined in your YAML file.
+
+  Returns `:ok`.
+
+  ## Example
+      iex> Cantastic.ReceivedFrameWatcher.subscribe(:my_netowrk, "inverter_status", self())
+      :ok
+
+      iex> Cantastic.Receiver.subscribe(:my_netowrk, ["inverter_status", "inverter_temperatures"], self())
+      :ok
+
+  """
   def subscribe(network_name, frame_names, frame_handler) when is_list(frame_names) do
     frame_names |> Enum.each(
       fn (frame_name) ->
@@ -126,6 +144,19 @@ defmodule Cantastic.ReceivedFrameWatcher do
     GenServer.call(watcher, {:subscribe, frame_handler})
   end
 
+  @doc """
+  Start monitoring the frame(s) reception frequencies.
+
+  Returns `:ok`.
+
+  ## Example
+      iex> Cantastic.ReceivedFrameWatcher.enable(:my_netowrk, "inverter_status")
+      :ok
+
+      iex> Cantastic.Receiver.enable(:my_netowrk, ["inverter_status", "inverter_temperatures"], self())
+      :ok
+
+  """
   def enable(network_name, frame_names) when is_list(frame_names) do
     frame_names |> Enum.each(
       fn (frame_name) ->
@@ -138,6 +169,19 @@ defmodule Cantastic.ReceivedFrameWatcher do
     GenServer.call(watcher, :enable)
   end
 
+  @doc """
+  Stop monitoring the frame(s) reception frequencies.
+
+  Returns `:ok`.
+
+  ## Example
+      iex> Cantastic.ReceivedFrameWatcher.enable(:my_netowrk, "inverter_status")
+      :ok
+
+      iex> Cantastic.Receiver.enable(:my_netowrk, ["inverter_status", "inverter_temperatures"], self())
+      :ok
+
+  """
   def disable(network_name, frame_names) when is_list(frame_names) do
     frame_names |> Enum.each(
       fn (frame_name) ->
@@ -150,6 +194,15 @@ defmodule Cantastic.ReceivedFrameWatcher do
     GenServer.call(watcher, :disable)
   end
 
+  @doc """
+  Returns `true` if the frame was received within the expected timeframe.
+
+  Returns `true` or `false`.
+
+  ## Example
+      iex> Cantastic.ReceivedFrameWatcher.is_alive(:my_netowrk, "inverter_status")
+      true
+  """
   def is_alive?(network_name, frame_name) do
     watcher = Interface.received_frame_watcher_process_name(network_name, frame_name)
     GenServer.call(watcher, :is_alive?)

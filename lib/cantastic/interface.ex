@@ -1,4 +1,5 @@
 defmodule Cantastic.Interface do
+  @moduledoc false
   alias Cantastic.{FrameSpecification, Receiver, Emitter, ConfigurationStore, ReceivedFrameWatcher, Socket, Util, OBD2}
   require Logger
 

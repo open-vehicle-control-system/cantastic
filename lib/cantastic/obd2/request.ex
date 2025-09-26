@@ -1,4 +1,17 @@
 defmodule Cantastic.OBD2.Request do
+  @moduledoc """
+    `Cantastic.OBD2.Request` is a `GenServer` used to emit OBD2 requests at the frequency defined in your YAML configuration file.
+
+    There is one process started per OBD2 request defined in your YAML file.
+
+    Here is an example on how to subscribe to one OBD2 request and start emitting it:
+
+    ```
+    :ok = OBD2.Request.subscribe(self(), :obd2, "current_speed_and_rotation_per_minute")
+    :ok = OBD2.Request.enable(:obd2, "current_speed_and_rotation_per_minute")
+    ```
+  """
+
   use GenServer
   require Logger
   alias Cantastic.{Interface, Socket}
@@ -103,16 +116,16 @@ defmodule Cantastic.OBD2.Request do
   end
 
   @doc """
-  Disable the emitter(s), the frame is/are then not emitted on the bus anymore.
+  Disable the OBD2 request(s), the requests is/are then not emitted on the bus anymore.
 
   Returns: `:ok`
 
   ## Examples
 
-    iex> Cantastic.OBD2.Request.enable(:obd2, "current_speed_and_rpm")
+    iex> Cantastic.OBD2.Request.disable(:obd2, "current_speed_and_rpm")
     :ok
 
-    iex> Cantastic.OBD2.Request.enable(:obd2, ["current_speed_and_rpm", "current_speed_and_rpm"])
+    iex> Cantastic.OBD2.Request.disable(:obd2, ["current_speed_and_rpm", "current_speed_and_rpm"])
     :ok
   """
   def disable(network_name, request_names) when is_list(request_names) do
@@ -127,6 +140,16 @@ defmodule Cantastic.OBD2.Request do
     GenServer.cast(request, :disable)
   end
 
+   @doc """
+  Subscribe `response_handler :: pid()` to one OBD2 request.
+
+  Returns `:ok`.
+
+  ## Example
+
+      iex> Cantastic.OBD2.Request(self(), :my_netowrk, "current_speed_and_rpm")
+      :ok
+  """
   def subscribe(response_handler, network_name, request_name) do
     request =  Interface.obd2_request_process_name(network_name, request_name)
     GenServer.cast(request, {:subscribe, response_handler})

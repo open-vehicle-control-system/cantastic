@@ -1,4 +1,23 @@
 defmodule Cantastic.Signal do
+  @moduledoc """
+    `Cantastic.Signal` is a `Struct` used to represent one CAN frame signal.
+
+    Each received `Cantastic.Frame` contains a list of `:signals`
+
+    The attributes are the following:
+
+    * `:name` The signal's name, as defined in your YAML file.
+    * `:frame_name` The signal's frame name.
+    * `:value` The interpreted value based on the rules defined in you YAML file.
+    * `:raw_value` The raw value received on the CAN network.
+    * `:unit` The unit defined in your YAML file (`String`).
+    * `:kind` The kind defined in your YAML file, one off:
+      * `:static`
+      * `:integer`
+      * `:decimal`
+      * `:enum`
+  """
+
   alias Decimal, as: D
 
   defstruct [
@@ -10,10 +29,20 @@ defmodule Cantastic.Signal do
     :kind
   ]
 
+  @doc """
+  Returns a `String` representation of the signal, used for debugging.
+
+  ## Example
+
+      iex> Cantastic.Signal.to_string(signal)
+      "[Signal] my_frame_name.signal_name = 12"
+
+  """
   def to_string(signal) do
     "[Signal] #{signal.frame_name}.#{signal.name} = #{signal.value}"
   end
 
+  @doc false
   def build_raw(signal_specification, value) do
     case signal_specification.kind do
       "static" ->
@@ -29,6 +58,7 @@ defmodule Cantastic.Signal do
     end
   end
 
+  @doc false
   def build_raw_decimal(signal_specification, value) do
     offsetted = value |> D.sub(signal_specification.offset)
     scaled    = offsetted |> D.div(signal_specification.scale)
@@ -45,6 +75,7 @@ defmodule Cantastic.Signal do
     end
   end
 
+  @doc false
   def interpret(frame, signal_specification) do
     signal = %__MODULE__{
       name: signal_specification.name,
@@ -77,6 +108,7 @@ defmodule Cantastic.Signal do
     end
   end
 
+  @doc false
   defp interpret_decimal(raw_val, signal_specification, value_length) do
     int = case {signal_specification.endianness, signal_specification.sign} do
       {"little", "signed"} ->
@@ -95,6 +127,7 @@ defmodule Cantastic.Signal do
     D.new(int) |> D.mult(signal_specification.scale) |> D.add(signal_specification.offset)
   end
 
+  @doc false
   defp extract_raw_value(raw_data, signal_specification) do
     case signal_specification.value_start do
       value_start when is_integer(value_start) ->
@@ -110,6 +143,7 @@ defmodule Cantastic.Signal do
     end
   end
 
+  @doc false
   defp extract_segment(raw_data, head_length, value_length) do
     <<_head::bitstring-size(head_length), segment::bitstring-size(value_length), _tail::bitstring>> = raw_data
     segment

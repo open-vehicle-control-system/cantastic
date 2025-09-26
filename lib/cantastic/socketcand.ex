@@ -1,4 +1,5 @@
 defmodule Cantastic.Socketcand do
+  @moduledoc false
   use GenServer
   require Logger
 
