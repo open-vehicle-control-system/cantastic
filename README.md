@@ -250,8 +250,6 @@ can_networks:
 
 #### OBD2 parameters definitions
 
-:name, :id, :kind, :precision, :sign, :value_length, :endianness, :unit, :scale, :offset
-
 | Key | Description | Required | Default value |
 |-----|-------------|----------|---------------|
 | `:name` | The parameter name, will be used in your own code to reference it | True |  |
