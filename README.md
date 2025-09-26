@@ -11,7 +11,7 @@ in the `mix.exs` file:
 
 ```elixir
 def deps do
-  [{:cantastic, "~> 1.0.0"}]
+  [{:cantastic, "~> 1.0.1"}]
 end
 ```
 
