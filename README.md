@@ -133,7 +133,7 @@ can_networks:
       - ....
 ```
 
-#### Frame definition properties
+#### Frame definitions
 
 | Key | Description | Required | Default value |
 |-----|-------------|----------|---------------|
@@ -146,9 +146,146 @@ can_networks:
 | `:required_on_time_frames` | The number of frames received at the expected frequency to consider a frame back to 'normal' | false | 5 |
 | `:signals` | An array of signals to be interpreted in this frame | False | [] |
 
+
+##### Example
+
+```YAML
+---
+can_networks:
+  my_network:
+    bitrate: 500000
+    received_frames:
+      - name: frame1
+        id: 0x100
+        frequency: 20
+        signals:
+          - name: signal1
+            ....
+          - name: signal1
+            ....
+```
+
+#### Signal definitions
+
+| Key | Description | Required | Default value |
+|-----|-------------|----------|---------------|
+| `:name` | The signal name, will be used in your own code to reference it | True |  |
+| `:value_start` | The bit number where the raw signal starts | True | |
+| `:value_length` | The number of bits to use for this signal | True | |
+| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"`, `"static"`, `"enum"` | False | `"decimal"` |
+| `:precision` | The precision to which a decimal signal should be rounded to | False | 2 |
+| `:sign` | Wheter the signal should be interpreted as a signed or unsigned integer | False | `"unsigned"` |
+| `:endianness` | The endianness to be used to interpret the signal | False | `"little"` |
+| `:mapping` | For `"enum"` values, a map for each integer value | False | {} |
+| `:unit` | An informational unit related to the signal's value | False | |
+| `:scale` | A decimal scale to be applied on the raw value, defined as a string in YAML | False | "1" |
+| `:offset` | A decimal offset to be applied on the raw value, defined as a string in YAML  | False | "0" |
+| `:value` | For `"static"` values, the integer raw representation to be used  | False | |
+
+##### Example
+
+```YAML
+---
+can_networks:
+  my_network:
+    bitrate: 500000
+    received_frames:
+      - name: frame1
+        id: 0x100
+        frequency: 20
+        signals:
+          - name: decimal_signal
+            value_start: 0
+            value_length: 8
+            kind: decimal
+            precision: 3
+            sign: signed
+            endianness: big
+            scale: "0.3444"
+            offset: "30"
+          - name: boolean_signal
+            value_start: 8
+            value_length: 1
+            kind: mapping
+            mapping:
+              0x00: false
+              0x01: true
+          - name: static_signal
+            value_start: 9
+            value_length: 8
+            kind: static
+            value: 0xAB
+
+```
+
 #### OBD2 request definitions
 
 
+| Key | Description | Required | Default value |
+|-----|-------------|----------|---------------|
+| `:name` | The OBD2 Request name, will be used in your own code to reference it | True |  |
+| `:request_frame_id` | The CAN Frame ID to be used for the OBD2 request | True | |
+| `:response_frame_id` | The CAN Frame ID of the frame used for the response | True | |
+| `:frequency` | The frequency is milliseconds at which the request should be emitted | True |  |
+| `:mode` | The OBD2 mode to be used | True |  |
+| `:parameters` | An array of parameters to be interpreted in this request | False | [] |
+
+##### Example
+
+```YAML
+---
+can_networks:
+  my_network:
+    bitrate: 500000
+    obd2_requests:
+      - name: obd2_request1
+        request_frame_id: 0x7DF
+        response_frame_id: 0x7E8
+        frequency: 20
+        mode: 0x01
+        parameters:
+          - name: parameter1
+            ....
+```
+
+#### OBD2 parameters definitions
+
+:name, :id, :kind, :precision, :sign, :value_length, :endianness, :unit, :scale, :offset
+
+| Key | Description | Required | Default value |
+|-----|-------------|----------|---------------|
+| `:name` | The parameter name, will be used in your own code to reference it | True |  |
+| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"` | False | `"decimal"` |
+| `:precision` | The precision to which a decimal parameter should be rounded to | False | 2 |
+| `:sign` | Wheter the parameter should be interpreted as a signed or unsigned integer | False | `"unsigned"` |
+| `:value_length` | The number of bits to use for this parameter | True | |
+| `:endianness` | The endianness to be used to interpret the parameter | False | `"little"` |
+| `:unit` | An informational unit related to the parameter's value | False | |
+| `:scale` | A decimal scale to be applied on the raw value, defined as a string in YAML | False | "1" |
+| `:offset` | A decimal offset to be applied on the raw value, defined as a string in YAML  | False | "0" |
+
+##### Example
+
+```YAML
+---
+can_networks:
+  my_network:
+    bitrate: 500000
+    obd2_requests:
+      - name: obd2_request1
+        request_frame_id: 0x7DF
+        response_frame_id: 0x7E8
+        frequency: 20
+        mode: 0x01
+        parameters:
+          - name: speed
+            id: 0x0D
+            value_length: 8
+          - name: rotation_per_minute
+            id: 0x0C
+            value_length: 16
+            scale: "0.25"
+```
 
 #### Utilities
 
@@ -179,3 +316,15 @@ can_networks:
 #  frames/frame1.yml
 TODO
 ```
+
+## Real world example
+
+Cantastic is used in the Open Vehicle Control System, you will find concrete usage example in this [repository](https://github.com/open-vehicle-control-system/ovcs)
+
+More concretely:
+
+* A YAML [configuration file](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/priv/can/vehicles/ovcs1.yml)
+* An [emitter](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/components/nissan/leaf_aze0/inverter.ex#L41)
+* A [receiver](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/components/nissan/leaf_aze0/inverter.ex#L55)
+* A [frame reception handler](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/components/nissan/leaf_aze0/inverter.ex#L124)
+* An [OBD2 Request](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/vehicles/obd2.ex#L29)
