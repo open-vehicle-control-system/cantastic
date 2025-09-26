@@ -13,7 +13,7 @@ defmodule Cantastic.MixProject do
       name: "Cantastic",
       docs: [
         extras: ["README.md", "LICENCE.txt"],
-        main: "Cantastic"
+        main: "README.md"
       ],
       source_url: "https://github.com/Spin42/cantastic",
       homepage_url: "https://github.com/Spin42/cantastic",
