@@ -9,7 +9,7 @@ defmodule Cantastic.FrameSpecification do
   defdelegate get_and_update(term, key, fun), to: Map
   defdelegate pop(term, key), to: Map
 
-  @authorized_yaml_keys [:id, :name, :signals, :frequency, :allowed_frequency_leeway, :allowed_missing_frames, :anchors]
+  @authorized_yaml_keys [:id, :name, :signals, :frequency, :allowed_frequency_leeway, :allowed_missing_frames, :required_on_time_frames, :anchors]
 
   defstruct [
     :id,
