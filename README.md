@@ -291,6 +291,12 @@ In order to keep your YAML file maintainable, Cantastic allows you to split it i
 
 `import!:ovcs_mini/generic_controller/0x701_main_controller_alive.yml`
 
+Paths are resolved relative to the importing YAML's directory. To import from another OTP application's `priv/` directory (useful when frame definitions live in a shared library), prefix the path with `@<otp_app>:`:
+
+`import!:@ovcs_can:can/components/ovcs/0x1A0_vms_status.yml`
+
+The path after `@otp_app:` is resolved against `:code.priv_dir(:otp_app)`.
+
 ##### Example:
 
 ```YAML

@@ -112,8 +112,14 @@ defmodule Cantastic.ConfigurationStore do
     {:ok, interpreted_node}
   end
   defp interpret_node(base_path, "import!:" <> path) do
-    full_path   = Path.join([base_path, path])
+    full_path = resolve_import_path(base_path, path)
     read_yaml(full_path)
   end
   defp interpret_node(_, node), do: {:ok, node}
+
+  defp resolve_import_path(_base_path, "@" <> rest) do
+    [otp_app, relative] = String.split(rest, ":", parts: 2)
+    Path.join(:code.priv_dir(String.to_atom(otp_app)), relative)
+  end
+  defp resolve_import_path(base_path, path), do: Path.join(base_path, path)
 end
