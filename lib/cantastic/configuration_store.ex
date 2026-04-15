@@ -78,11 +78,47 @@ defmodule Cantastic.ConfigurationStore do
     end)
   end
 
+  # `priv_can_config_path` may be a string (single YAML) or a list
+  # of strings (multiple YAMLs merged together — useful when a
+  # single BEAM hosts what would normally be separate firmwares,
+  # e.g. running VMS + infotainment in one local-dev process).
+  # Same-named networks are unioned; emitted/received frame lists
+  # are concatenated and deduplicated.
   defp read_configuration() do
-    opt_app              = Application.get_env(:cantastic, :otp_app)
-    priv_can_config_path = Application.get_env(:cantastic, :priv_can_config_path)
-    config_path          = Path.join(:code.priv_dir(opt_app), priv_can_config_path)
-    read_yaml(config_path)
+    otp_app = Application.get_env(:cantastic, :otp_app)
+
+    paths =
+      Application.get_env(:cantastic, :priv_can_config_path)
+      |> List.wrap()
+
+    priv_dir = :code.priv_dir(otp_app)
+
+    Enum.reduce_while(paths, {:ok, %{can_networks: %{}}}, fn rel, {:ok, acc} ->
+      case read_yaml(Path.join(priv_dir, rel)) do
+        {:ok, cfg} -> {:cont, {:ok, merge_configurations(acc, cfg)}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp merge_configurations(acc, cfg) do
+    acc_networks = Map.get(acc, :can_networks, %{})
+    new_networks = Map.get(cfg, :can_networks, %{})
+
+    merged_networks =
+      Map.merge(acc_networks, new_networks, fn _name, a, b ->
+        %{
+          bitrate: a[:bitrate] || b[:bitrate],
+          emitted_frames:
+            ((a[:emitted_frames] || []) ++ (b[:emitted_frames] || []))
+            |> Enum.uniq(),
+          received_frames:
+            ((a[:received_frames] || []) ++ (b[:received_frames] || []))
+            |> Enum.uniq()
+        }
+      end)
+
+    %{acc | can_networks: merged_networks}
   end
 
   defp read_yaml(path) do
