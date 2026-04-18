@@ -35,7 +35,8 @@ defmodule Cantastic.MixProject do
       {:decimal, "~> 2.1.1"},
       {:espec, "~> 1.9.2", only: :test},
       {:faker, "~> 0.18", only: :test},
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 

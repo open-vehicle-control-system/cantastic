@@ -5,69 +5,95 @@ defmodule Cantastic.ConfigurationStore do
 
   def start_link(_) do
     networks = compute_networks()
+
     state = %{
       networks: networks,
       setup_can_interfaces: Application.get_env(:cantastic, :setup_can_interfaces) || false,
-      socketcand_ip_interface: Application.get_env(:cantastic, :socketcand_ip_interface) || "eth0",
-      enable_socketcand: Application.get_env(:cantastic, :enable_socketcand) || false,
+      socketcand_ip_interface:
+        Application.get_env(:cantastic, :socketcand_ip_interface) || "eth0",
+      enable_socketcand: Application.get_env(:cantastic, :enable_socketcand) || false
     }
+
     Agent.start_link(fn -> state end, name: __MODULE__)
   end
 
   def network_names() do
-    Agent.get(__MODULE__, fn(state) ->
-      state.networks |> Enum.map(fn(network) ->
+    Agent.get(__MODULE__, fn state ->
+      state.networks
+      |> Enum.map(fn network ->
         network.name
       end)
     end)
   end
 
   def networks() do
-    Agent.get(__MODULE__, fn(state) ->
+    Agent.get(__MODULE__, fn state ->
       state.networks
     end)
   end
 
   def socketcand_ip_interface() do
-    Agent.get(__MODULE__, fn(state) ->
+    Agent.get(__MODULE__, fn state ->
       state.socketcand_ip_interface
     end)
   end
 
   def enable_socketcand() do
-    Agent.get(__MODULE__, fn(state) ->
+    Agent.get(__MODULE__, fn state ->
       state.enable_socketcand
     end)
   end
 
   def setup_can_interfaces() do
-    Agent.get(__MODULE__, fn(state) ->
+    Agent.get(__MODULE__, fn state ->
       state.setup_can_interfaces
     end)
   end
 
   defp compute_networks() do
-    {:ok, configuration}        = read_configuration()
-    can_network_mappings = case Application.get_env(:cantastic, :can_network_mappings) do
-      nil -> throw "CAN network mappings are missing from the Cantastic configuratiion"
-      [] -> throw "You must define at least one CAN network mapping in the Cantastic configuratiion"
-      fun when is_function(fun) -> fun.()
-      networks when is_list(networks) -> networks
-      {module, function_name, params} -> apply(module, function_name, params)
-      _ -> throw "CAN netowrk mappings is not valid in the Cantastic configuratiion"
-    end
+    {:ok, configuration} = read_configuration()
 
-    Enum.map(can_network_mappings, fn (can_network_mapping) ->
-      {network_name, interface, labels} = case can_network_mapping do
-        {network_name, interface} -> {network_name, interface, []}
-        {network_name, interface, labels: labels} -> {network_name, interface, labels}
+    can_network_mappings =
+      case Application.get_env(:cantastic, :can_network_mappings) do
+        nil ->
+          throw("CAN network mappings are missing from the Cantastic configuratiion")
+
+        [] ->
+          throw(
+            "You must define at least one CAN network mapping in the Cantastic configuratiion"
+          )
+
+        fun when is_function(fun) ->
+          fun.()
+
+        networks when is_list(networks) ->
+          networks
+
+        {module, function_name, params} ->
+          apply(module, function_name, params)
+
+        _ ->
+          throw("CAN netowrk mappings is not valid in the Cantastic configuratiion")
       end
-      network_name          = network_name |> String.to_atom()
+
+    Enum.map(can_network_mappings, fn can_network_mapping ->
+      {network_name, interface, labels} =
+        case can_network_mapping do
+          {network_name, interface} -> {network_name, interface, []}
+          {network_name, interface, labels: labels} -> {network_name, interface, labels}
+        end
+
+      network_name = network_name |> String.to_atom()
       network_configuration = configuration.can_networks[network_name]
+
       if is_nil(network_configuration) do
-         throw "[Yaml configuration error] CAN Network: '#{network_name}' is missing from the Yaml configuration."
+        throw(
+          "[Yaml configuration error] CAN Network: '#{network_name}' is missing from the Yaml configuration."
+        )
       end
-      bitrate               = network_configuration.bitrate
+
+      bitrate = network_configuration.bitrate
+
       %{
         network_name: network_name,
         interface: interface,
@@ -122,10 +148,9 @@ defmodule Cantastic.ConfigurationStore do
   end
 
   defp read_yaml(path) do
-    with {:ok, config}  <- YamlElixir.read_from_file(path, atoms: true, merge_anchors: true),
+    with {:ok, config} <- YamlElixir.read_from_file(path, atoms: true, merge_anchors: true),
          {:ok, encoded} <- Jason.encode(config),
-         {:ok, decoded} <- encoded |> Jason.decode(keys: :atoms)
-    do
+         {:ok, decoded} <- encoded |> Jason.decode(keys: :atoms) do
       base_path = path |> Path.dirname()
       interpret_node(base_path, decoded)
     else
@@ -134,28 +159,38 @@ defmodule Cantastic.ConfigurationStore do
   end
 
   defp interpret_node(base_path, node) when is_map(node) do
-    interpreted_node = node |> Enum.reduce(%{}, fn({key, value}, acc) ->
-      {:ok, interpreted_value} = interpret_node(base_path, value)
-      acc |> Map.put(key, interpreted_value)
-    end)
+    interpreted_node =
+      node
+      |> Enum.reduce(%{}, fn {key, value}, acc ->
+        {:ok, interpreted_value} = interpret_node(base_path, value)
+        acc |> Map.put(key, interpreted_value)
+      end)
+
     {:ok, interpreted_node}
   end
+
   defp interpret_node(base_path, node) when is_list(node) do
-    interpreted_node = node |> Enum.map(fn(value) ->
-      {:ok, interpreted_value} = interpret_node(base_path, value)
-      interpreted_value
-    end)
+    interpreted_node =
+      node
+      |> Enum.map(fn value ->
+        {:ok, interpreted_value} = interpret_node(base_path, value)
+        interpreted_value
+      end)
+
     {:ok, interpreted_node}
   end
+
   defp interpret_node(base_path, "import!:" <> path) do
     full_path = resolve_import_path(base_path, path)
     read_yaml(full_path)
   end
+
   defp interpret_node(_, node), do: {:ok, node}
 
   defp resolve_import_path(_base_path, "@" <> rest) do
     [otp_app, relative] = String.split(rest, ":", parts: 2)
     Path.join(:code.priv_dir(String.to_atom(otp_app)), relative)
   end
+
   defp resolve_import_path(base_path, path), do: Path.join(base_path, path)
 end
