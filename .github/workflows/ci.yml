@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MIX_ENV: test
+
+jobs:
+  check:
+    name: Elixir · format · espec · credo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3"
+          elixir-version: "1.17"
+
+      - uses: actions/cache@v5
+        with:
+          path: |
+            deps
+            _build
+          key: mix-${{ hashFiles('mix.lock') }}
+          restore-keys: mix-
+
+      - run: mix deps.get
+
+      - name: mix format --check-formatted
+        if: hashFiles('.formatter.exs') != ''
+        run: mix format --check-formatted
+
+      # cantastic's Application requires a configured CAN topology to
+      # boot (see Cantastic.ConfigurationStore); --no-start skips it
+      # for tests that exercise pure functions.
+      - run: mix espec --no-start
+
+      - run: mix credo

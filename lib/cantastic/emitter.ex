@@ -25,34 +25,38 @@ defmodule Cantastic.Emitter do
   end
 
   @impl true
-  def init(%{process_name:  _, frame_specification: frame_specification, socket: socket, network_name: network_name}) do
-    {:ok,
-      %{
-        socket: socket,
-        network_name: network_name,
-        parameters_builder_function: :default,
-        sending_timer: nil,
-        data: %{},
-        frequency: frame_specification.frequency,
+  def init(%{
+        process_name: _,
         frame_specification: frame_specification,
-        failed_sending_count: 0,
-        last_sending_error_reason: nil
-      }
-    }
+        socket: socket,
+        network_name: network_name
+      }) do
+    {:ok,
+     %{
+       socket: socket,
+       network_name: network_name,
+       parameters_builder_function: :default,
+       sending_timer: nil,
+       data: %{},
+       frequency: frame_specification.frequency,
+       frame_specification: frame_specification,
+       failed_sending_count: 0,
+       last_sending_error_reason: nil
+     }}
   end
 
   @impl true
   def handle_info(:send_frame, state) do
     {:ok, parameters, data} = state.parameters_builder_function.(state.data)
-    {:ok, raw_frame}        = Frame.build_raw(state.frame_specification, parameters)
-    state                   = send_raw(state, raw_frame)
+    {:ok, raw_frame} = Frame.build_raw(state.frame_specification, parameters)
+    state = send_raw(state, raw_frame)
     {:noreply, %{state | data: data}}
   end
 
   @impl true
   def handle_cast({:forward, frame}, state) do
     raw_frame = Frame.to_raw(frame)
-    state     = send_raw(state, raw_frame)
+    state = send_raw(state, raw_frame)
     {:noreply, state}
   end
 
@@ -62,6 +66,7 @@ defmodule Cantastic.Emitter do
       nil ->
         {:ok, timer} = :timer.send_interval(state.frequency, :send_frame)
         {:noreply, %{state | sending_timer: timer}}
+
       _ ->
         {:noreply, state}
     end
@@ -72,6 +77,7 @@ defmodule Cantastic.Emitter do
     case state.sending_timer do
       nil ->
         {:noreply, state}
+
       sending_timer ->
         {:ok, _} = :timer.cancel(sending_timer)
         {:noreply, %{state | sending_timer: nil}}
@@ -91,14 +97,16 @@ defmodule Cantastic.Emitter do
 
   @impl true
   def handle_call({:configure, initialization_args}, _from, state) do
-    parameters_builder_function = case initialization_args.parameters_builder_function do
-      :default -> fn (data) -> {:ok, data, data} end
-      function when is_function(function) -> function
-    end
+    parameters_builder_function =
+      case initialization_args.parameters_builder_function do
+        :default -> fn data -> {:ok, data, data} end
+        function when is_function(function) -> function
+      end
 
-    state = state
-    |> Map.put(:parameters_builder_function, parameters_builder_function)
-    |> Map.put(:data, initialization_args.initial_data)
+    state =
+      state
+      |> Map.put(:parameters_builder_function, parameters_builder_function)
+      |> Map.put(:data, initialization_args.initial_data)
 
     if Map.get(initialization_args, :enable, false), do: GenServer.cast(self(), :enable)
     {:reply, :ok, state}
@@ -140,7 +148,7 @@ defmodule Cantastic.Emitter do
       :ok
   """
   def update(network_name, frame_name, fun, timeout \\ 5000) when is_function(fun, 1) do
-    emitter =  Interface.emitter_process_name(network_name, frame_name)
+    emitter = Interface.emitter_process_name(network_name, frame_name)
     GenServer.call(emitter, {:update, fun}, timeout)
   end
 
@@ -181,7 +189,7 @@ defmodule Cantastic.Emitter do
       :ok
   """
   def configure(network_name, frame_name, initialization_args) do
-    emitter =  Interface.emitter_process_name(network_name, frame_name)
+    emitter = Interface.emitter_process_name(network_name, frame_name)
     GenServer.call(emitter, {:configure, initialization_args})
   end
 
@@ -199,12 +207,12 @@ defmodule Cantastic.Emitter do
       :ok
   """
   def enable(network_name, frame_names) when is_list(frame_names) do
-    frame_names |> Enum.each(
-      fn (frame_name) ->
-        enable(network_name, frame_name)
-      end
-    )
+    frame_names
+    |> Enum.each(fn frame_name ->
+      enable(network_name, frame_name)
+    end)
   end
+
   def enable(network_name, frame_name) do
     emitter = Interface.emitter_process_name(network_name, frame_name)
     GenServer.cast(emitter, :enable)
@@ -224,12 +232,12 @@ defmodule Cantastic.Emitter do
       :ok
   """
   def disable(network_name, frame_names) when is_list(frame_names) do
-    frame_names |> Enum.each(
-      fn (frame_name) ->
-        disable(network_name, frame_name)
-      end
-    )
+    frame_names
+    |> Enum.each(fn frame_name ->
+      disable(network_name, frame_name)
+    end)
   end
+
   def disable(network_name, frame_name) do
     emitter = Interface.emitter_process_name(network_name, frame_name)
     GenServer.cast(emitter, :disable)
@@ -252,8 +260,15 @@ defmodule Cantastic.Emitter do
 
   defp send_raw(state, raw_frame) do
     case Socket.send(state.socket, raw_frame) do
-      :ok -> state
-      {:error, reason} -> %{state | failed_sending_count: state.failed_sending_count + 1, last_sending_error_reason: reason}
+      :ok ->
+        state
+
+      {:error, reason} ->
+        %{
+          state
+          | failed_sending_count: state.failed_sending_count + 1,
+            last_sending_error_reason: reason
+        }
     end
   end
 end

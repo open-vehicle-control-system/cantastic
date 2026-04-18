@@ -38,7 +38,7 @@ Cantastic supports the following configuration options:
 | `:can_network_mappings` | A comma separated list of can network names and related interfaces. |  |
 | `:setup_can_interfaces`| Wheher Cantastic should setup the CAN interfaces. It requires the Elixir user to have the approriate rights (usually the case for Nerves hosts). | `false` |
 | `:otp_app` | The name of the OTP app owning the priv directory where the can config file is stored |  |
-| `:priv_can_config_path` | The relative path where the Yaml config file is located |  |
+| `:priv_can_config_path` | The relative path where the Yaml config file is located. May also be a **list** of paths — each file is read and same-named networks are merged (emitted/received frame lists concatenated and deduplicated). Useful when a single BEAM hosts multiple sides (e.g. running VMS + infotainment in one local-dev process). |  |
 | `:enable_socketcand` | Wheter Cantastic should start the socketcand server on all configured interfaces. This allows to remotely access the CAN interfaces for debugging.| `false` |
 | `:socketcand_ip_interface` | The IP interface on which socketcand should listen to. | `"eth0"` |
 
