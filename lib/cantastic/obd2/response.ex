@@ -1,5 +1,5 @@
 defmodule Cantastic.OBD2.Response do
-  alias Cantastic.OBD2.Parameter
+  alias Cantastic.OBD2.Codec
 
   @moduledoc """
     `Cantastic.OBD2.Response` is a `Struct` used to represent one OBD2 response.
@@ -62,32 +62,19 @@ defmodule Cantastic.OBD2.Response do
   end
 
   defp decode_positive(request_specification, socket_message, mode, raw_parameters) do
-    try do
-      parameters =
-        request_specification.parameter_specifications
-        |> Enum.reduce(%{raw_parameters: raw_parameters}, fn parameter_specification, acc ->
-          case Parameter.interpret(acc.raw_parameters, parameter_specification) do
-            {:ok, parameter, truncated} ->
-              acc
-              |> put_in([parameter.name], parameter)
-              |> put_in([:raw_parameters], truncated)
+    case Codec.decode_parameters(request_specification, raw_parameters) do
+      {:ok, parameters} ->
+        response = %__MODULE__{
+          request_name: request_specification.name,
+          mode: mode,
+          parameters: parameters,
+          reception_timestamp: socket_message.reception_timestamp
+        }
 
-            {:error, reason} ->
-              throw({:decode_failed, parameter_specification.name, reason})
-          end
-        end)
+        {:ok, response}
 
-      response = %__MODULE__{
-        request_name: request_specification.name,
-        mode: mode,
-        parameters: parameters,
-        reception_timestamp: socket_message.reception_timestamp
-      }
-
-      {:ok, response}
-    catch
-      {:decode_failed, _parameter_name, _reason} = err ->
-        {:error, err}
+      {:error, _reason} = err ->
+        err
     end
   end
 end

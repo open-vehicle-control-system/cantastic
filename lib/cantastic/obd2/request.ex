@@ -15,7 +15,7 @@ defmodule Cantastic.OBD2.Request do
   use GenServer
   require Logger
   alias Cantastic.{Interface, Socket}
-  alias Cantastic.OBD2.{Response}
+  alias Cantastic.OBD2.{Codec, Response}
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -24,7 +24,7 @@ defmodule Cantastic.OBD2.Request do
   @impl true
   def init(%{process_name:  _, request_specification: request_specification}) do
     {:ok, socket}      = Socket.bind_isotp(request_specification.can_interface, request_specification.request_frame_id, request_specification.response_frame_id, 0x0)
-    {:ok, raw_request} = compute_raw_request(request_specification)
+    {:ok, raw_request} = Codec.encode_request(request_specification)
     {:ok,
       %{
         socket: socket,
@@ -88,14 +88,6 @@ defmodule Cantastic.OBD2.Request do
     response_handlers |> Enum.each(fn (response_handler) ->
       Process.send(response_handler, {:handle_obd2_error, error}, [])
     end)
-  end
-
-  defp compute_raw_request(request_specification) do
-      acc         = <<request_specification.mode::big-integer-size(8)>>
-      raw_request = request_specification.parameter_specifications |> Enum.reduce(acc, fn(parameter_specification, acc) ->
-       <<acc::bitstring, parameter_specification.id::integer-size(8)>>
-    end)
-    {:ok, raw_request}
   end
 
   @doc """
