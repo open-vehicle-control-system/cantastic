@@ -5,6 +5,51 @@ It does all the heavy lifting of parsing the incoming frames and sending the out
 
 RAW and ISOTP modes are currently supported, BCM (Broadcast Manager) support is planned.
 
+## OBD2 / KWP2000 / UDS diagnostics
+
+On top of plain CAN, Cantastic ships brand-agnostic codecs for the standard
+diagnostic protocols you'll meet on any modern vehicle: SAE J1979 (OBD2),
+ISO 14230-3 (KWP2000) and ISO 14229-1 (UDS). You declare requests in YAML
+just like CAN frames, subscribe to them from your application code, and
+receive parsed responses as messages.
+
+| Mode | Service  | Standard | Purpose |
+|------|----------|----------|---------|
+| 0x01 | `Mode01` | OBD2 | Show current data (live PIDs) |
+| 0x02 | `Mode02` | OBD2 | Show freeze frame data |
+| 0x03 | `Mode03` | OBD2 | Read stored DTCs |
+| 0x04 | `Mode04` | OBD2 | Clear emission DTCs |
+| 0x07 | `Mode07` | OBD2 | Read pending DTCs |
+| 0x09 | `Mode09` | OBD2 | Read vehicle information (VIN, calibration IDs) |
+| 0x0A | `Mode0A` | OBD2 | Read permanent DTCs |
+| 0x10 | `Mode10` | UDS | DiagnosticSessionControl |
+| 0x11 | `Mode11` | UDS | ECUReset |
+| 0x14 | `Mode14` | UDS | ClearDiagnosticInformation |
+| 0x19 | `Mode19` | UDS | ReadDTCInformation (with status bytes) |
+| 0x1A | `Mode1A` | KWP2000 | ReadECUIdentification (Toyota/Lexus VIN read) |
+| 0x21 | `Mode21` | KWP2000 | ReadDataByLocalIdentifier (Toyota live data) |
+| 0x22 | `Mode22` | UDS | ReadDataByIdentifier (16-bit DIDs) |
+| 0x2E | `Mode2E` | UDS | WriteDataByIdentifier |
+| 0x31 | `Mode31` | UDS | RoutineControl (start / stop / get result) |
+| 0x3E | `Mode3E` | UDS | TesterPresent (session keepalive) |
+
+Negative responses (`0x7F SID NRC`) reach subscribers as
+`{:handle_obd2_error, {:nrc, sid, code, name}}` and the request process
+stays alive — no crashes when an ECU rejects a request.
+
+**Brand-specific use cases stay in your application, not in cantastic.**
+Whenever a manufacturer wraps a proprietary payload behind a standard
+service (Nissan Leaf cell voltages behind Mode 0x22, VW long-coding bytes
+behind Mode 0x2E, etc.), declare the parameter as `kind: "bytes"` and
+decode the raw payload in your response handler.
+
+For the full YAML reference per mode, the supported parameter kinds, the
+brand-specific extension pattern, and concrete real-world workflows
+(e.g. clearing a stubborn DTC on a modern UDS-only ECU; reading live data
+on a Toyota family vehicle), see the
+[`Cantastic.OBD2`](https://hexdocs.pm/cantastic/Cantastic.OBD2.html)
+module documentation.
+
 ## Installation
 
 in the `mix.exs` file:
@@ -220,16 +265,12 @@ can_networks:
 
 #### OBD2 request definitions
 
-Cantastic ships with codecs for the universally-supported SAE J1979 services
-(Mode 0x01, 0x02, 0x03, 0x04, 0x07, 0x09, 0x0A) plus UDS Mode 0x22
-(`ReadDataByIdentifier`). Negative responses (`0x7F SID NRC`) reach
-subscribers as `{:handle_obd2_error, _}` instead of crashing the request
-process.
-
-For the full per-mode YAML reference and the recommended pattern for using
-Cantastic with brand-specific UDS DIDs **without putting brand-specific
-code into the library itself**, see the `Cantastic.OBD2` module
-documentation.
+Per-request keys; for the full list of supported modes (OBD2 / KWP2000 /
+UDS) and the brand-specific extension pattern, see the
+[OBD2 / KWP2000 / UDS diagnostics](#obd2--kwp2000--uds-diagnostics)
+section above and the
+[`Cantastic.OBD2`](https://hexdocs.pm/cantastic/Cantastic.OBD2.html)
+module documentation.
 
 | Key | Description | Required | Default value |
 |-----|-------------|----------|---------------|
@@ -239,6 +280,7 @@ documentation.
 | `:frequency` | The frequency is milliseconds at which the request should be emitted | True |  |
 | `:mode` | The OBD2 mode to be used | True |  |
 | `:parameters` | An array of parameters to be interpreted in this request | False | [] |
+| `:options` | A map of service-specific knobs (e.g. `session_type`, `routine_id`, `group_of_dtc`, `data`, `sub_function`, `status_mask`, `reset_type`). See the per-mode reference in `Cantastic.OBD2`. | False | `{}` |
 
 ##### Example
 
