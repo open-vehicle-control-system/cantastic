@@ -12,8 +12,10 @@ defmodule Cantastic.OBD2.Parameter do
     * `:raw_value` The raw value received on the CAN network.
     * `:unit` The unit defined in your YAML file (`String`).
     * `:kind` The kind defined in your YAML file, one off:
-      * `:decimal`
-      * `:integer`
+      * `"decimal"`
+      * `"integer"`
+      * `"ascii"`
+      * `"bytes"`
   """
 
   alias Decimal, as: D
@@ -51,7 +53,7 @@ defmodule Cantastic.OBD2.Parameter do
   end
 
   @doc false
-  def interpret(raw_parameters, parameter_specification) do
+  def interpret(raw_parameters, parameter_specification, id_size \\ 8) do
     parameter = %__MODULE__{
       name: parameter_specification.name,
       id: parameter_specification.id,
@@ -62,18 +64,32 @@ defmodule Cantastic.OBD2.Parameter do
     try do
       value_length = parameter_specification.value_length
       id           = parameter.id
-      <<^id::integer-size(8), raw_value::bitstring-size(value_length), truncated_raw_parameters::bitstring>> = raw_parameters
-      decimal = interpret_decimal(raw_value, parameter_specification, value_length) |> D.round(parameter_specification.precision)
-      value   = case parameter_specification.kind do
-        "decimal" ->
-          decimal
-        "integer" ->
-          decimal |> D.to_integer()
-      end
+      <<^id::integer-size(id_size), raw_value::bitstring-size(value_length), truncated_raw_parameters::bitstring>> = raw_parameters
+      value = decode_value(raw_value, parameter_specification, value_length)
       {:ok, %{parameter | value: value, raw_value: raw_value}, truncated_raw_parameters}
     rescue
       error in MatchError ->
         {:error, error}
+    end
+  end
+
+  @doc false
+  defp decode_value(raw_value, parameter_specification, value_length) do
+    case parameter_specification.kind do
+      "decimal" ->
+        interpret_decimal(raw_value, parameter_specification, value_length)
+        |> D.round(parameter_specification.precision)
+
+      "integer" ->
+        interpret_decimal(raw_value, parameter_specification, value_length)
+        |> D.round(parameter_specification.precision)
+        |> D.to_integer()
+
+      "ascii" ->
+        raw_value
+
+      "bytes" ->
+        raw_value
     end
   end
 
