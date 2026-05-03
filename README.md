@@ -220,6 +220,16 @@ can_networks:
 
 #### OBD2 request definitions
 
+Cantastic ships with codecs for the universally-supported SAE J1979 services
+(Mode 0x01, 0x02, 0x03, 0x04, 0x07, 0x09, 0x0A) plus UDS Mode 0x22
+(`ReadDataByIdentifier`). Negative responses (`0x7F SID NRC`) reach
+subscribers as `{:handle_obd2_error, _}` instead of crashing the request
+process.
+
+For the full per-mode YAML reference and the recommended pattern for using
+Cantastic with brand-specific UDS DIDs **without putting brand-specific
+code into the library itself**, see the `Cantastic.OBD2` module
+documentation.
 
 | Key | Description | Required | Default value |
 |-----|-------------|----------|---------------|
@@ -253,7 +263,7 @@ can_networks:
 | Key | Description | Required | Default value |
 |-----|-------------|----------|---------------|
 | `:name` | The parameter name, will be used in your own code to reference it | True |  |
-| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"` | False | `"decimal"` |
+| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"`, `"ascii"`, `"bytes"` | False | `"decimal"` |
 | `:precision` | The precision to which a decimal parameter should be rounded to | False | 2 |
 | `:sign` | Wheter the parameter should be interpreted as a signed or unsigned integer | False | `"unsigned"` |
 | `:value_length` | The number of bits to use for this parameter | True | |
