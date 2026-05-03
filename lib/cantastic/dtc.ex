@@ -92,4 +92,34 @@ defmodule Cantastic.DTC do
   end
 
   def encode(_), do: {:error, :invalid_dtc_format}
+
+  @doc """
+  Decode a sequence of 16-bit raw DTCs into a list of code strings.
+
+  This is the payload shape used by Mode 0x03, 0x07 and 0x0A responses,
+  after the leading SID and count bytes have been stripped.
+
+  Returns `{:ok, codes}` or `{:error, reason}`.
+
+  ## Examples
+
+      iex> Cantastic.DTC.decode_list(<<>>)
+      {:ok, []}
+
+      iex> Cantastic.DTC.decode_list(<<0x03, 0x01, 0xC1, 0x00>>)
+      {:ok, ["P0301", "U0100"]}
+
+      iex> Cantastic.DTC.decode_list(<<0x03>>)
+      {:error, :malformed_dtc_list}
+  """
+  def decode_list(<<>>), do: {:ok, []}
+
+  def decode_list(<<raw::binary-size(2), rest::bitstring>>) do
+    with {:ok, code} <- decode(raw),
+         {:ok, more} <- decode_list(rest) do
+      {:ok, [code | more]}
+    end
+  end
+
+  def decode_list(_), do: {:error, :malformed_dtc_list}
 end
