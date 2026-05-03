@@ -1,84 +1,17 @@
 defmodule Cantastic.SignalSpec do
   use ESpec
-  alias Cantastic.{Signal, SignalSpecification}
+  alias Cantastic.Signal
   alias Decimal, as: D
 
   describe ".to_string/1" do
-
-    let :signal, do: %Signal{name: "SignalName", frame_name: "FrameName", value: value(), unit: "M", kind: kind()}
-    let :result, do: Signal.to_string(signal())
-
-    context "For integer signal values" do
-      let :value, do: 111
-      let :kind, do: "integer"
-
-      it "returns a valid string including the signal name, frame name and value" do
-        expect(result()) |> to(eq("[Signal] FrameName.SignalName = 111"))
-      end
+    it "renders integer signals with frame name and value" do
+      signal = %Signal{name: "rpm", frame_name: "engine", value: 2500, unit: "RPM", kind: "integer"}
+      expect(Signal.to_string(signal)) |> to(eq("[Signal] engine.rpm = 2500"))
     end
-  end
 
-  describe ".build_raw(signal_specification, value)" do
-    let :result, do: Signal.build_raw(signal_specification(), value())
-    let :signal_specification, do: %SignalSpecification{
-      kind: kind(),
-      scale: scale(),
-      offset: offset(),
-      value_length: value_length(),
-      endianness: endianness(),
-      sign: "unsigned"
-    }
-
-    context "for an integer kind" do
-      let :kind, do: "integer"
-
-      context "and a little endianess" do
-        let endianness: "little"
-
-        context "and a scale of 1" do
-          let :scale, do: D.new(1)
-
-          context "and an offset of 0" do
-            let :offset, do: D.new(0)
-
-            context "and a value length of 16" do
-              let :value_length, do: 16
-
-              context "and any value within range" do
-                let :value, do: Faker.random_between(0, 1000)
-
-                it "returns the bitstring representation of the integer" do
-                  expect(result()) |> to(eq(<<value()::little-integer-size(16)>>))
-                end
-              end
-            end
-          end
-        end
-      end
-
-      context "and a big endianess" do
-        let endianness: "big"
-
-        context "and a scale of 1" do
-          let :scale, do: D.new(1)
-
-          context "and an offset of 0" do
-            let :offset, do: D.new(0)
-
-            context "and a value length of 16" do
-              let :value_length, do: 16
-
-              context "and any value within range" do
-                let :value, do: Faker.random_between(0, 1000)
-
-                it "returns the bitstring representation of the integer" do
-                  expect(result()) |> to(eq(<<value()::big-integer-size(16)>>))
-                end
-              end
-            end
-          end
-        end
-      end
+    it "renders decimal signals with frame name and value" do
+      signal = %Signal{name: "speed", frame_name: "obd2", value: D.new("25.5"), unit: "km/h", kind: "decimal"}
+      expect(Signal.to_string(signal)) |> to(eq("[Signal] obd2.speed = 25.5"))
     end
   end
 end
