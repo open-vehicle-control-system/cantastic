@@ -158,6 +158,41 @@ defmodule Cantastic.OBD2.RequestSpec do
       end
     end
 
+    context "when the ECU returns a negative response (NRC)" do
+      it "delivers a :handle_obd2_error and keeps the request process alive" do
+        pid = start_request([speed_parameter_spec()])
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "current_speed")
+          # 0x7F = negative response, 0x01 = the SID being rejected (Mode 0x01),
+          # 0x12 = NRC subFunctionNotSupported
+          FakeSocket.push_recv(<<0x7F, 0x01, 0x12>>)
+          :ok = Request.enable(:test_network, "current_speed")
+
+          assert_receive {:handle_obd2_error, {:nrc, 0x01, 0x12, :sub_function_not_supported}}, 1_000
+          expect(Process.alive?(pid)) |> to(be_true())
+        after
+          shutdown(pid)
+        end
+      end
+
+      it "recovers and decodes the next valid response from the same ECU" do
+        pid = start_request([speed_parameter_spec()])
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "current_speed")
+          FakeSocket.push_recv(<<0x7F, 0x01, 0x31>>)
+          FakeSocket.push_recv(<<0x41, 0x0D, 0x32>>)
+          :ok = Request.enable(:test_network, "current_speed")
+
+          assert_receive {:handle_obd2_error, {:nrc, 0x01, 0x31, :request_out_of_range}}, 1_000
+          assert_receive {:handle_obd2_response, %Response{parameters: %{"speed" => %{value: 50}}}}, 1_000
+        after
+          shutdown(pid)
+        end
+      end
+    end
+
     context "when the request is disabled" do
       it "stops sending requests on the bus" do
         pid = start_request([speed_parameter_spec()])

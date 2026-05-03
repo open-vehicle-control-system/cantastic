@@ -45,7 +45,9 @@ defmodule Cantastic.OBD2.Request do
       send_to_response_handlers(state.response_handlers, response)
       {:noreply, state}
     else
-      {:error, error} -> {:error, error}
+      {:error, error} ->
+        send_to_error_handlers(state.response_handlers, error)
+        {:noreply, state}
     end
   end
 
@@ -79,6 +81,12 @@ defmodule Cantastic.OBD2.Request do
   defp send_to_response_handlers(response_handlers, response) do
     response_handlers |> Enum.each(fn (response_handler) ->
       Process.send(response_handler, {:handle_obd2_response, response}, [])
+    end)
+  end
+
+  defp send_to_error_handlers(response_handlers, error) do
+    response_handlers |> Enum.each(fn (response_handler) ->
+      Process.send(response_handler, {:handle_obd2_error, error}, [])
     end)
   end
 
