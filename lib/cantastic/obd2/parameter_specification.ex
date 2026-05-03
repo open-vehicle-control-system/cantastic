@@ -3,7 +3,7 @@ defmodule Cantastic.OBD2.ParameterSpecification do
 
   alias Decimal, as: D
 
-  @valid_kinds ["decimal", "integer"]
+  @valid_kinds ["decimal", "integer", "ascii", "bytes"]
   @valid_signs ["signed", "unsigned"]
   @valid_endiannesses ["big", "little"]
   @authorized_yaml_keys [:name, :id, :kind, :precision, :sign, :value_length, :endianness, :unit, :scale, :offset]
