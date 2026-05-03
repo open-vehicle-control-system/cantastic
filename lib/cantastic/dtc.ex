@@ -122,4 +122,41 @@ defmodule Cantastic.DTC do
   end
 
   def decode_list(_), do: {:error, :malformed_dtc_list}
+
+  @doc """
+  Decode a 24-bit UDS DTC into its code string and fault-type byte.
+
+  ISO 14229-1 DTCs carry one extra byte beyond the OBD2 16-bit form. The
+  first two bytes encode the same `P0301`-style code; the third byte is a
+  "fault type" extension whose meaning varies by manufacturer (powertrain
+  vs. body, electrical vs. functional, etc.). `decode_uds/1` returns both
+  parts so a caller can decide what to do with the extension.
+
+  Returns `{:ok, %{code: code, fault_type: fault_type}}` or
+  `{:error, reason}`.
+
+  ## Examples
+
+      iex> Cantastic.DTC.decode_uds(<<0x03, 0x01, 0x00>>)
+      {:ok, %{code: "P0301", fault_type: 0x00}}
+
+      iex> Cantastic.DTC.decode_uds(<<0xC1, 0x00, 0x88>>)
+      {:ok, %{code: "U0100", fault_type: 0x88}}
+
+      iex> Cantastic.DTC.decode_uds(<<0x12, 0x34>>)
+      {:error, :invalid_uds_dtc}
+  """
+  def decode_uds(<<system::2, first_digit::2, rest::12, fault_type::8>>) do
+    letter = Map.fetch!(@system_to_letter, system)
+
+    hex =
+      (first_digit * 0x1000 + rest)
+      |> Integer.to_string(16)
+      |> String.pad_leading(4, "0")
+      |> String.upcase()
+
+    {:ok, %{code: letter <> hex, fault_type: fault_type}}
+  end
+
+  def decode_uds(_), do: {:error, :invalid_uds_dtc}
 end

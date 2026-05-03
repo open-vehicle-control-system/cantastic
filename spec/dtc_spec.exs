@@ -86,6 +86,29 @@ defmodule Cantastic.DTCSpec do
     end
   end
 
+  describe "decoding a 24-bit UDS DTC" do
+    context "for a code with no fault-type extension" do
+      it "returns the code string and a zero fault_type" do
+        expect(DTC.decode_uds(<<0x03, 0x01, 0x00>>))
+        |> to(eq({:ok, %{code: "P0301", fault_type: 0x00}}))
+      end
+    end
+
+    context "for a code with a non-zero fault-type extension" do
+      it "returns both parts" do
+        expect(DTC.decode_uds(<<0xC1, 0x00, 0x88>>))
+        |> to(eq({:ok, %{code: "U0100", fault_type: 0x88}}))
+      end
+    end
+
+    context "with anything other than 3 bytes" do
+      it "returns :invalid_uds_dtc" do
+        expect(DTC.decode_uds(<<0x12, 0x34>>)) |> to(eq({:error, :invalid_uds_dtc}))
+        expect(DTC.decode_uds(<<>>)) |> to(eq({:error, :invalid_uds_dtc}))
+      end
+    end
+  end
+
   describe "decoding a list of raw DTCs" do
     context "when the payload is empty" do
       it "returns an empty list" do
