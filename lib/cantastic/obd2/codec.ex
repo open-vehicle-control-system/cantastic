@@ -7,7 +7,18 @@ defmodule Cantastic.OBD2.Codec do
   # generic positional 8-bit-id layout. This preserves the lib's prior
   # behaviour for configurations that declare a non-Mode-0x01 mode.
 
-  alias Cantastic.OBD2.Service.{Mode01, Mode02, Mode03, Mode04, Mode07, Mode09, Mode0A, Mode22}
+  alias Cantastic.OBD2.Service.{
+    Mode01,
+    Mode02,
+    Mode03,
+    Mode04,
+    Mode07,
+    Mode09,
+    Mode0A,
+    Mode11,
+    Mode22,
+    Mode3E
+  }
 
   @services %{
     0x01 => Mode01,
@@ -17,7 +28,9 @@ defmodule Cantastic.OBD2.Codec do
     0x07 => Mode07,
     0x09 => Mode09,
     0x0A => Mode0A,
-    0x22 => Mode22
+    0x11 => Mode11,
+    0x22 => Mode22,
+    0x3E => Mode3E
   }
 
   def encode_request(request_specification) do
