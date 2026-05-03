@@ -85,4 +85,32 @@ defmodule Cantastic.DTCSpec do
       end
     end
   end
+
+  describe "decoding a list of raw DTCs" do
+    context "when the payload is empty" do
+      it "returns an empty list" do
+        expect(DTC.decode_list(<<>>)) |> to(eq({:ok, []}))
+      end
+    end
+
+    context "when the payload contains one DTC" do
+      it "returns a single-element list" do
+        expect(DTC.decode_list(<<0x03, 0x01>>)) |> to(eq({:ok, ["P0301"]}))
+      end
+    end
+
+    context "when the payload contains several DTCs from different systems" do
+      it "decodes them in order" do
+        expect(DTC.decode_list(<<0x03, 0x01, 0x40, 0x42, 0xC1, 0x00>>))
+        |> to(eq({:ok, ["P0301", "C0042", "U0100"]}))
+      end
+    end
+
+    context "when the payload is not a multiple of 2 bytes" do
+      it "returns :malformed_dtc_list" do
+        expect(DTC.decode_list(<<0x03>>)) |> to(eq({:error, :malformed_dtc_list}))
+        expect(DTC.decode_list(<<0x03, 0x01, 0xC1>>)) |> to(eq({:error, :malformed_dtc_list}))
+      end
+    end
+  end
 end
