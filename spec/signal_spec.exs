@@ -18,14 +18,15 @@ defmodule Cantastic.SignalSpec do
     end
   end
 
-  describe ".build_raw(raw_data, signal_specification, value)" do
-    let :result, do: Signal.build_raw(raw_data(), signal_specification(), value())
+  describe ".build_raw(signal_specification, value)" do
+    let :result, do: Signal.build_raw(signal_specification(), value())
     let :signal_specification, do: %SignalSpecification{
       kind: kind(),
       scale: scale(),
       offset: offset(),
       value_length: value_length(),
-      endianness: endianness()
+      endianness: endianness(),
+      sign: "unsigned"
     }
 
     context "for an integer kind" do
@@ -43,8 +44,7 @@ defmodule Cantastic.SignalSpec do
             context "and a value length of 16" do
               let :value_length, do: 16
 
-              context "and a value independent of the previous raw data" do
-                let :raw_data, do: <<>>
+              context "and any value within range" do
                 let :value, do: Faker.random_between(0, 1000)
 
                 it "returns the bitstring representation of the integer" do
@@ -65,11 +65,10 @@ defmodule Cantastic.SignalSpec do
           context "and an offset of 0" do
             let :offset, do: D.new(0)
 
-            context "and a value length of 8" do
+            context "and a value length of 16" do
               let :value_length, do: 16
 
-              context "and a value independent of the previous raw data" do
-                let :raw_data, do: <<>>
+              context "and any value within range" do
                 let :value, do: Faker.random_between(0, 1000)
 
                 it "returns the bitstring representation of the integer" do
