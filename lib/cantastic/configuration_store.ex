@@ -147,8 +147,18 @@ defmodule Cantastic.ConfigurationStore do
     %{acc | can_networks: merged_networks}
   end
 
-  defp read_yaml(path) do
-    with {:ok, config} <- YamlElixir.read_from_file(path, atoms: true, merge_anchors: true),
+  @doc """
+  Read a YAML configuration file at the given path, resolving any
+  `import!:<relative-path>` or `import!:@<otp_app>:<priv-relative-path>` directives
+  it contains.
+
+  Exposed so that consumers and tests can validate a standalone YAML configuration
+  without booting the full `Cantastic.ConfigurationStore` agent.
+
+  Returns `{:ok, decoded_map}` or `{:error, reason}`.
+  """
+  def read_yaml(path) do
+    with {:ok, config}  <- YamlElixir.read_from_file(path, atoms: true, merge_anchors: true),
          {:ok, encoded} <- Jason.encode(config),
          {:ok, decoded} <- encoded |> Jason.decode(keys: :atoms) do
       base_path = path |> Path.dirname()
