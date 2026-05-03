@@ -108,7 +108,8 @@ defmodule Cantastic.TestFactory do
       frequency: 1000,
       mode: 0x01,
       parameter_specifications: [],
-      can_interface: "vcan_test"
+      can_interface: "vcan_test",
+      options: %{}
     }
     Map.merge(base, Map.new(overrides))
   end
