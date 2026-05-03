@@ -123,6 +123,47 @@ defmodule Cantastic.OBD2.UdsSessionSpec do
     end
   end
 
+  describe "opening an extended session (Mode 0x10)" do
+    context "with the default session type" do
+      it "sends 0x10 followed by 0x03 (extendedDiagnosticSession)" do
+        pid = start("session_open", 0x10)
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "session_open")
+          # Response: <<0x50, 0x03, 0x00 0x32 (p2=50ms), 0x01 0xF4 (p2_star=5000ms)>>
+          FakeSocket.push_recv(<<0x50, 0x03, 0x00, 0x32, 0x01, 0xF4>>)
+          :ok = Request.enable(:test_network, "session_open")
+
+          assert_receive {:handle_obd2_response, %Response{parameters: parameters}}, 1_000
+          [first | _] = FakeSocket.sent()
+          expect(first) |> to(eq(<<0x10, 0x03>>))
+          expect(parameters["p2_server_max_ms"].value) |> to(eq(50))
+          expect(parameters["p2_star_server_max_ms"].value) |> to(eq(5000))
+        after
+          shutdown(pid)
+        end
+      end
+    end
+
+    context "with an explicit session_type from options" do
+      it "uses that byte instead of the default" do
+        pid = start("session_open", 0x10, %{session_type: 0x02})
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "session_open")
+          FakeSocket.push_recv(<<0x50, 0x02, 0x00, 0x14, 0x00, 0x64>>)
+          :ok = Request.enable(:test_network, "session_open")
+
+          assert_receive {:handle_obd2_response, _}, 1_000
+          [first | _] = FakeSocket.sent()
+          expect(first) |> to(eq(<<0x10, 0x02>>))
+        after
+          shutdown(pid)
+        end
+      end
+    end
+  end
+
   describe "keeping a session alive (Mode 0x3E TesterPresent)" do
     context "with the default sub-function (zeroSubFunction)" do
       it "sends 0x3E 0x00" do

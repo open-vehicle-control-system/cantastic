@@ -15,6 +15,7 @@ defmodule Cantastic.OBD2.Codec do
     Mode07,
     Mode09,
     Mode0A,
+    Mode10,
     Mode11,
     Mode22,
     Mode3E
@@ -28,6 +29,7 @@ defmodule Cantastic.OBD2.Codec do
     0x07 => Mode07,
     0x09 => Mode09,
     0x0A => Mode0A,
+    0x10 => Mode10,
     0x11 => Mode11,
     0x22 => Mode22,
     0x3E => Mode3E
