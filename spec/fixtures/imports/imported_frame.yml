@@ -1,0 +1,9 @@
+---
+name: imported_frame
+id: 0x200
+frequency: 50
+signals:
+  - name: imported_signal
+    value_start: 0
+    value_length: 8
+    kind: integer

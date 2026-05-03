@@ -1,0 +1,6 @@
+---
+can_networks:
+  ovcs:
+    bitrate: 500000
+    received_frames:
+      - import!:imports/imported_frame.yml
