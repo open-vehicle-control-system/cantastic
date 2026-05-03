@@ -10,7 +10,7 @@ defmodule Cantastic.OBD2.RequestSpecification do
   defdelegate get_and_update(term, key, fun), to: Map
   defdelegate pop(term, key), to: Map
 
-  @authorized_yaml_keys [:name, :request_frame_id, :response_frame_id, :frequency, :mode, :parameters, :anchors]
+  @authorized_yaml_keys [:name, :request_frame_id, :response_frame_id, :frequency, :mode, :parameters, :options, :anchors]
 
   defstruct [
     :name,
@@ -19,7 +19,8 @@ defmodule Cantastic.OBD2.RequestSpecification do
     :frequency,
     :mode,
     :parameter_specifications,
-    :can_interface
+    :can_interface,
+    options: %{}
   ]
 
   def from_yaml(network_name, can_interface, yaml_obd2_request_specification) do
@@ -34,7 +35,8 @@ defmodule Cantastic.OBD2.RequestSpecification do
       frequency: yaml_obd2_request_specification.frequency,
       mode: yaml_obd2_request_specification.mode,
       parameter_specifications: parameter_specifications,
-      can_interface: can_interface
+      can_interface: can_interface,
+      options: yaml_obd2_request_specification[:options] || %{}
     }
     validate_specification!(request_specification)
     {:ok, request_specification}
