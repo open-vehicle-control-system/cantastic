@@ -5,50 +5,10 @@ It does all the heavy lifting of parsing the incoming frames and sending the out
 
 RAW and ISOTP modes are currently supported, BCM (Broadcast Manager) support is planned.
 
-## OBD2 / KWP2000 / UDS diagnostics
-
-On top of plain CAN, Cantastic ships brand-agnostic codecs for the standard
-diagnostic protocols you'll meet on any modern vehicle: SAE J1979 (OBD2),
-ISO 14230-3 (KWP2000) and ISO 14229-1 (UDS). You declare requests in YAML
-just like CAN frames, subscribe to them from your application code, and
-receive parsed responses as messages.
-
-| Mode | Service  | Standard | Purpose |
-|------|----------|----------|---------|
-| 0x01 | `Mode01` | OBD2 | Show current data (live PIDs) |
-| 0x02 | `Mode02` | OBD2 | Show freeze frame data |
-| 0x03 | `Mode03` | OBD2 | Read stored DTCs |
-| 0x04 | `Mode04` | OBD2 | Clear emission DTCs |
-| 0x07 | `Mode07` | OBD2 | Read pending DTCs |
-| 0x09 | `Mode09` | OBD2 | Read vehicle information (VIN, calibration IDs) |
-| 0x0A | `Mode0A` | OBD2 | Read permanent DTCs |
-| 0x10 | `Mode10` | UDS | DiagnosticSessionControl |
-| 0x11 | `Mode11` | UDS | ECUReset |
-| 0x14 | `Mode14` | UDS | ClearDiagnosticInformation |
-| 0x19 | `Mode19` | UDS | ReadDTCInformation (with status bytes) |
-| 0x1A | `Mode1A` | KWP2000 | ReadECUIdentification (Toyota/Lexus VIN read) |
-| 0x21 | `Mode21` | KWP2000 | ReadDataByLocalIdentifier (Toyota live data) |
-| 0x22 | `Mode22` | UDS | ReadDataByIdentifier (16-bit DIDs) |
-| 0x2E | `Mode2E` | UDS | WriteDataByIdentifier |
-| 0x31 | `Mode31` | UDS | RoutineControl (start / stop / get result) |
-| 0x3E | `Mode3E` | UDS | TesterPresent (session keepalive) |
-
-Negative responses (`0x7F SID NRC`) reach subscribers as
-`{:handle_obd2_error, {:nrc, sid, code, name}}` and the request process
-stays alive — no crashes when an ECU rejects a request.
-
-**Brand-specific use cases stay in your application, not in cantastic.**
-Whenever a manufacturer wraps a proprietary payload behind a standard
-service (Nissan Leaf cell voltages behind Mode 0x22, VW long-coding bytes
-behind Mode 0x2E, etc.), declare the parameter as `kind: "bytes"` and
-decode the raw payload in your response handler.
-
-For the full YAML reference per mode, the supported parameter kinds, the
-brand-specific extension pattern, and concrete real-world workflows
-(e.g. clearing a stubborn DTC on a modern UDS-only ECU; reading live data
-on a Toyota family vehicle), see the
-[`Cantastic.OBD2`](https://hexdocs.pm/cantastic/Cantastic.OBD2.html)
-module documentation.
+Diagnostic codecs for OBD2, KWP2000 and UDS are also included on top of the
+plain CAN stack — see the [diagnostics section](#obd2--kwp2000--uds-diagnostics)
+below for the full list of supported services and how to use them on a
+real vehicle.
 
 ## Installation
 
@@ -372,6 +332,60 @@ can_networks:
 #  frames/frame1.yml
 TODO
 ```
+
+## OBD2 / KWP2000 / UDS diagnostics
+
+On top of plain CAN, Cantastic ships brand-agnostic codecs for the standard
+diagnostic protocols you'll meet on any modern vehicle: SAE J1979 (OBD2),
+ISO 14230-3 (KWP2000) and ISO 14229-1 (UDS). Diagnostic requests are declared
+in the same YAML used for CAN frames (see the
+[OBD2 request definitions](#obd2-request-definitions) section above) and
+subscribed to from your application code; responses arrive as messages.
+
+### Supported services
+
+| Mode | Service  | Standard | Purpose |
+|------|----------|----------|---------|
+| 0x01 | `Mode01` | OBD2 | Show current data (live PIDs) |
+| 0x02 | `Mode02` | OBD2 | Show freeze frame data |
+| 0x03 | `Mode03` | OBD2 | Read stored DTCs |
+| 0x04 | `Mode04` | OBD2 | Clear emission DTCs |
+| 0x07 | `Mode07` | OBD2 | Read pending DTCs |
+| 0x09 | `Mode09` | OBD2 | Read vehicle information (VIN, calibration IDs) |
+| 0x0A | `Mode0A` | OBD2 | Read permanent DTCs |
+| 0x10 | `Mode10` | UDS | DiagnosticSessionControl |
+| 0x11 | `Mode11` | UDS | ECUReset |
+| 0x14 | `Mode14` | UDS | ClearDiagnosticInformation |
+| 0x19 | `Mode19` | UDS | ReadDTCInformation (with status bytes) |
+| 0x1A | `Mode1A` | KWP2000 | ReadECUIdentification (Toyota/Lexus VIN read) |
+| 0x21 | `Mode21` | KWP2000 | ReadDataByLocalIdentifier (Toyota live data) |
+| 0x22 | `Mode22` | UDS | ReadDataByIdentifier (16-bit DIDs) |
+| 0x2E | `Mode2E` | UDS | WriteDataByIdentifier |
+| 0x31 | `Mode31` | UDS | RoutineControl (start / stop / get result) |
+| 0x3E | `Mode3E` | UDS | TesterPresent (session keepalive) |
+
+Negative responses (`0x7F SID NRC`) reach subscribers as
+`{:handle_obd2_error, {:nrc, sid, code, name}}` and the request process
+stays alive — no crashes when an ECU rejects a request.
+
+### Brand-specific use cases
+
+Manufacturers expose hundreds of proprietary DIDs, routines and local
+identifiers behind the standard services. Cantastic stays brand-agnostic:
+whenever a payload is brand-specific (Nissan Leaf cell voltages behind
+Mode 0x22, VW long-coding bytes behind Mode 0x2E, Toyota engine maps behind
+Mode 0x21, etc.) declare the parameter as `kind: "bytes"` and decode the
+raw payload inside your own response handler. No brand quirks need to land
+in the library itself.
+
+### Further reading
+
+For the per-mode YAML reference, the supported parameter kinds, the
+brand-specific extension pattern in detail and concrete real-world workflows
+(e.g. clearing a stubborn DTC on a modern UDS-only ECU; reading live data on
+a Toyota family vehicle), see the
+[`Cantastic.OBD2`](https://hexdocs.pm/cantastic/Cantastic.OBD2.html)
+module documentation.
 
 ## Real world example
 
