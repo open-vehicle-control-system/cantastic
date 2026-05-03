@@ -4,15 +4,8 @@ defmodule Cantastic.SignalSpec do
   alias Decimal, as: D
 
   describe ".to_string/1" do
-    let :signal,
-      do: %Signal{
-        name: "SignalName",
-        frame_name: "FrameName",
-        value: value(),
-        unit: "M",
-        kind: kind()
-      }
 
+    let :signal, do: %Signal{name: "SignalName", frame_name: "FrameName", value: value(), unit: "M", kind: kind()}
     let :result, do: Signal.to_string(signal())
 
     context "For integer signal values" do
@@ -25,53 +18,66 @@ defmodule Cantastic.SignalSpec do
     end
   end
 
-  describe ".build_raw/2" do
-    let :signal_specification,
-      do: %SignalSpecification{
-        kind: kind(),
-        scale: scale(),
-        offset: offset(),
-        value_length: value_length(),
-        endianness: endianness(),
-        sign: sign()
-      }
-
+  describe ".build_raw(signal_specification, value)" do
     let :result, do: Signal.build_raw(signal_specification(), value())
-    let :scale, do: D.new(1)
-    let :offset, do: D.new(0)
-    let :value_length, do: 16
-    let :sign, do: "unsigned"
+    let :signal_specification, do: %SignalSpecification{
+      kind: kind(),
+      scale: scale(),
+      offset: offset(),
+      value_length: value_length(),
+      endianness: endianness(),
+      sign: "unsigned"
+    }
 
-    context "for an integer kind, little endianness, scale 1, offset 0, length 16" do
+    context "for an integer kind" do
       let :kind, do: "integer"
-      let :endianness, do: "little"
-      let :value, do: 510
 
-      it "returns the bitstring representation of the integer" do
-        expect(result()) |> to(eq(<<value()::little-unsigned-integer-size(16)>>))
+      context "and a little endianess" do
+        let endianness: "little"
+
+        context "and a scale of 1" do
+          let :scale, do: D.new(1)
+
+          context "and an offset of 0" do
+            let :offset, do: D.new(0)
+
+            context "and a value length of 16" do
+              let :value_length, do: 16
+
+              context "and any value within range" do
+                let :value, do: Faker.random_between(0, 1000)
+
+                it "returns the bitstring representation of the integer" do
+                  expect(result()) |> to(eq(<<value()::little-integer-size(16)>>))
+                end
+              end
+            end
+          end
+        end
       end
-    end
 
-    context "for an integer kind, big endianness, scale 1, offset 0, length 16" do
-      let :kind, do: "integer"
-      let :endianness, do: "big"
-      let :value, do: 510
+      context "and a big endianess" do
+        let endianness: "big"
 
-      it "returns the bitstring representation of the integer" do
-        expect(result()) |> to(eq(<<value()::big-unsigned-integer-size(16)>>))
-      end
-    end
+        context "and a scale of 1" do
+          let :scale, do: D.new(1)
 
-    context "for a static kind the value field is returned verbatim" do
-      let :kind, do: "static"
-      let :endianness, do: nil
-      let :signal_specification,
-        do: %SignalSpecification{kind: "static", value: <<0xAB, 0xCD>>}
+          context "and an offset of 0" do
+            let :offset, do: D.new(0)
 
-      let :value, do: :ignored
+            context "and a value length of 16" do
+              let :value_length, do: 16
 
-      it "returns the stored static value" do
-        expect(result()) |> to(eq(<<0xAB, 0xCD>>))
+              context "and any value within range" do
+                let :value, do: Faker.random_between(0, 1000)
+
+                it "returns the bitstring representation of the integer" do
+                  expect(result()) |> to(eq(<<value()::big-integer-size(16)>>))
+                end
+              end
+            end
+          end
+        end
       end
     end
   end

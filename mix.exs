@@ -22,10 +22,12 @@ defmodule Cantastic.MixProject do
   end
 
   def application do
-    [
-      extra_applications: [:logger],
-      mod: {Cantastic.Application, []}
-    ]
+    base = [extra_applications: [:logger]]
+    if Mix.env() == :test do
+      base
+    else
+      base ++ [mod: {Cantastic.Application, []}]
+    end
   end
 
   defp deps do
