@@ -1,6 +1,6 @@
 defmodule Cantastic.OBD2 do
   @moduledoc """
-  OBD2 and UDS diagnostic services for `Cantastic`.
+  OBD2, KWP2000 and UDS diagnostic services for `Cantastic`.
 
   This module is documentation-only — the actual runtime entry point is
   `Cantastic.OBD2.Request` (subscribe / enable / disable). Read this page
@@ -16,16 +16,25 @@ defmodule Cantastic.OBD2 do
   `Cantastic.OBD2.Codec`. Modes without a registered service fall back to
   the Mode 0x01 generic positional codec.
 
-  | Mode | Service       | Standard               | Purpose                                  |
-  |------|---------------|------------------------|------------------------------------------|
-  | 0x01 | `Mode01`      | SAE J1979              | Show current data (live PIDs)            |
-  | 0x02 | `Mode02`      | SAE J1979              | Show freeze frame data                   |
-  | 0x03 | `Mode03`      | SAE J1979              | Read stored DTCs                         |
-  | 0x04 | `Mode04`      | SAE J1979              | Clear DTCs and stored values             |
-  | 0x07 | `Mode07`      | SAE J1979              | Read pending DTCs                        |
-  | 0x09 | `Mode09`      | SAE J1979              | Read vehicle information (VIN, cal IDs)  |
-  | 0x0A | `Mode0A`      | SAE J1979              | Read permanent DTCs                      |
-  | 0x22 | `Mode22`      | ISO 14229-1 (UDS)      | Read DataByIdentifier (16-bit DIDs)      |
+  | Mode | Service  | Standard            | Purpose                                     |
+  |------|----------|---------------------|---------------------------------------------|
+  | 0x01 | `Mode01` | SAE J1979           | Show current data (live PIDs)               |
+  | 0x02 | `Mode02` | SAE J1979           | Show freeze frame data                      |
+  | 0x03 | `Mode03` | SAE J1979           | Read stored DTCs                            |
+  | 0x04 | `Mode04` | SAE J1979           | Clear emission DTCs                         |
+  | 0x07 | `Mode07` | SAE J1979           | Read pending DTCs                           |
+  | 0x09 | `Mode09` | SAE J1979           | Read vehicle information (VIN, cal IDs)     |
+  | 0x0A | `Mode0A` | SAE J1979           | Read permanent DTCs                         |
+  | 0x10 | `Mode10` | ISO 14229-1 (UDS)   | DiagnosticSessionControl                    |
+  | 0x11 | `Mode11` | ISO 14229-1 (UDS)   | ECUReset                                    |
+  | 0x14 | `Mode14` | ISO 14229-1 (UDS)   | ClearDiagnosticInformation                  |
+  | 0x19 | `Mode19` | ISO 14229-1 (UDS)   | ReadDTCInformation                          |
+  | 0x1A | `Mode1A` | ISO 14230-3 (KWP)   | ReadECUIdentification                       |
+  | 0x21 | `Mode21` | ISO 14230-3 (KWP)   | ReadDataByLocalIdentifier                   |
+  | 0x22 | `Mode22` | ISO 14229-1 (UDS)   | ReadDataByIdentifier (16-bit DIDs)          |
+  | 0x2E | `Mode2E` | ISO 14229-1 (UDS)   | WriteDataByIdentifier                       |
+  | 0x31 | `Mode31` | ISO 14229-1 (UDS)   | RoutineControl (start / stop / get result)  |
+  | 0x3E | `Mode3E` | ISO 14229-1 (UDS)   | TesterPresent (session keepalive)           |
 
   ## YAML quick reference
 
@@ -36,10 +45,12 @@ defmodule Cantastic.OBD2 do
           request_frame_id: <CAN id used to send the request>
           response_frame_id: <CAN id of the ECU's reply>
           frequency: <ms between automatic re-emissions>
-          mode: 0x01 .. 0x22
-          parameters: [ … ]    # what to read; shape depends on mode
+          mode: 0x01 .. 0x3E
+          parameters: [ … ]    # optional; depends on mode
+          options: { … }       # optional; service-specific knobs
 
-  Per-mode notes:
+  Per-mode notes follow. Anything not mentioned in `:options` falls back to
+  the default documented in the corresponding service module.
 
   ### Mode 0x01 — current data (live PIDs)
 
@@ -54,7 +65,7 @@ defmodule Cantastic.OBD2 do
           mode: 0x01
           parameters:
             - name: speed
-              id: 0x0D            # 8-bit PID
+              id: 0x0D
               kind: integer
               value_length: 8
               unit: km/h
@@ -83,7 +94,7 @@ defmodule Cantastic.OBD2 do
           frequency: 1000
           mode: 0x03
 
-  ### Mode 0x04 — clear DTCs
+  ### Mode 0x04 — clear emission DTCs
 
   No parameters. A positive response means the ECU accepted the clear; if
   it refuses (engine running, security access required, etc.) subscribers
@@ -107,10 +118,112 @@ defmodule Cantastic.OBD2 do
               kind: ascii
               value_length: 136   # 17 bytes × 8
 
+  ### Mode 0x10 — open a diagnostic session (UDS)
+
+  Required before reading non-default DIDs or running routines on
+  UDS-only ECUs. The response carries the session timing budget,
+  surfaced as `parameters["p2_server_max_ms"]` and
+  `parameters["p2_star_server_max_ms"]` so the caller can tune its
+  TesterPresent interval to match.
+
+      obd2_requests:
+        - name: extended_session
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 5000
+          mode: 0x10
+          options:
+            session_type: 0x03    # 0x03 extendedDiagnosticSession (default)
+
+  ### Mode 0x11 — reset the ECU (UDS)
+
+  No parameters. `options.reset_type` defaults to `0x01` (hardReset);
+  other common values are `0x02` (keyOffOnReset) and `0x03` (softReset).
+
+      obd2_requests:
+        - name: reset_ecu
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 30000
+          mode: 0x11
+          options:
+            reset_type: 0x01
+
+  ### Mode 0x14 — clear DTCs (UDS)
+
+  Modern equivalent of Mode 0x04. `options.group_of_dtc` is a 24-bit
+  picker (default `0xFFFFFF`, "all DTCs").
+
+      obd2_requests:
+        - name: uds_clear_dtcs
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 5000
+          mode: 0x14
+          options:
+            group_of_dtc: 0xFFFFFF
+
+  ### Mode 0x19 — read DTC information (UDS)
+
+  Modern equivalent of Mode 0x03. Each DTC comes back *with a status
+  byte* (confirmed / pending / test-failed-since-last-clear …) plus a
+  manufacturer-specific fault-type byte. Surfaced as a list of maps
+  under `parameters["dtc_records"]`.
+
+      obd2_requests:
+        - name: uds_read_dtcs
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 1000
+          mode: 0x19
+          options:
+            sub_function: 0x02    # reportDTCByStatusMask (default)
+            status_mask: 0xFF     # match all status bits (default)
+
+  Each item in `parameters["dtc_records"].value` is shaped
+  `%{code: "P0301", fault_type: 0x00, status: 0x09}`.
+
+  ### Mode 0x1A — KWP2000 ECU identification
+
+  Used by Toyota / Lexus and several other manufacturers as their VIN
+  / ECU info read in place of OBD2 Mode 0x09. Single byte
+  identification option, ASCII payload.
+
+      obd2_requests:
+        - name: kwp_vin
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 5000
+          mode: 0x1A
+          parameters:
+            - name: vin
+              id: 0x90              # identification option byte
+              kind: ascii
+              value_length: 136     # 17 bytes × 8
+
+  ### Mode 0x21 — KWP2000 read by local identifier
+
+  Heavily used by Toyota / Lexus and older Asian-platform ECUs.
+  Wire format mirrors Mode 0x01 with a different SID and 8-bit
+  local identifiers. Multi-LID batches supported.
+
+      obd2_requests:
+        - name: kwp_engine_data
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 200
+          mode: 0x21
+          parameters:
+            - name: engine_load
+              id: 0x05
+              kind: integer
+              value_length: 8
+              unit: "%"
+
   ### Mode 0x22 — UDS ReadDataByIdentifier
 
-  16-bit DIDs. Multi-DID requests are allowed but most ECUs only honour a
-  single DID per call.
+  16-bit DIDs. Multi-DID requests are allowed but most ECUs only honour
+  a single DID per call.
 
       obd2_requests:
         - name: battery_state
@@ -120,10 +233,63 @@ defmodule Cantastic.OBD2 do
           mode: 0x22
           parameters:
             - name: state_of_charge
-              id: 0xF40D            # 16-bit DID
+              id: 0xF40D
               kind: integer
               value_length: 8
               unit: "%"
+
+  ### Mode 0x2E — UDS WriteDataByIdentifier
+
+  Pair to Mode 0x22. The DID comes from the single parameter's `id`;
+  the bytes to write come from `options.data`.
+
+      obd2_requests:
+        - name: write_config
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 5000
+          mode: 0x2E
+          parameters:
+            - name: config_word
+              id: 0xF1A0
+              kind: bytes
+              value_length: 16
+          options:
+            data: !!binary "..."        # raw bytes to write
+
+  ### Mode 0x31 — UDS RoutineControl
+
+  Start / stop / query the result of an ECU routine (forced DPF
+  regeneration, ABS bleed, throttle adaptation reset, …). The
+  status_record returned is brand- and routine-specific, so it is
+  surfaced as raw bytes under `parameters["routine_status"]`.
+
+      obd2_requests:
+        - name: start_dpf_regen
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 1000
+          mode: 0x31
+          options:
+            routine_id: 0x0203        # required
+            sub_function: 0x01        # 0x01 startRoutine (default)
+
+  ### Mode 0x3E — UDS TesterPresent
+
+  Sent periodically (typically every 2 s) to keep a non-default
+  diagnostic session alive. `options.sub_function` defaults to `0x00`
+  (zeroSubFunction, expects a positive response); set bit 7 (`0x80`)
+  to suppress the ECU's positive response, which is the usual choice
+  for high-frequency keepalives.
+
+      obd2_requests:
+        - name: tester_present
+          request_frame_id: 0x7E0
+          response_frame_id: 0x7E8
+          frequency: 2000
+          mode: 0x3E
+          options:
+            sub_function: 0x80        # suppressPosRespMsgIndicationBit
 
   ## Negative response handling
 
@@ -137,10 +303,10 @@ defmodule Cantastic.OBD2 do
 
   ## Brand-specific UDS without brand-specific code in cantastic
 
-  Manufacturers expose hundreds of proprietary DIDs and routines. The
-  philosophy here is that Cantastic provides the universal wire-format
-  primitives and **never** embeds brand quirks. There are three patterns
-  that keep brand-specific behaviour in your application:
+  Manufacturers expose hundreds of proprietary DIDs, routines and local
+  identifiers. The philosophy here is that Cantastic provides the
+  universal wire-format primitives and **never** embeds brand quirks.
+  Two patterns keep brand-specific behaviour in your application:
 
   ### 1. Use `kind: "bytes"` for proprietary payload layouts
 
@@ -178,15 +344,41 @@ defmodule Cantastic.OBD2 do
   you need a different interpretation than the YAML provides, reach for
   `:raw_value` and decode it yourself.
 
-  ### 3. Send arbitrary single-byte modes for one-off services
+  ## A typical real-world diagnostic session
 
-  Modes such as 0x10 (DiagnosticSessionControl) or 0x3E (TesterPresent)
-  aren't yet shipped as dedicated services. Until they are, you can
-  declare them under Mode 0x01's positional layout if the ECU's response
-  is shaped that way, or subscribe directly to the underlying
-  `Cantastic.Socket` to send raw frames. Dedicated services for the
-  remaining standard UDS modes are planned and will be added without
-  changing the YAML you already have.
+  Diagnostic flows on a real car typically chain several services
+  together. The orchestration is application-level — Cantastic gives
+  you the building blocks. A common pattern (e.g. clearing a stubborn
+  DTC on a modern UDS-only ECU):
+
+  1. **Open an extended session** with Mode 0x10
+     (`session_type: 0x03`). The ECU's response gives you `p2`
+     timings; use them to size your TesterPresent cadence.
+  2. **Start a TesterPresent loop** with Mode 0x3E at roughly half the
+     ECU's `p2_server_max` (often ~2 s with a `sub_function: 0x80`
+     suppress-positive-response).
+  3. **Read DTCs** with Mode 0x19 (`sub_function: 0x02`) to confirm
+     which faults are present. The status byte tells you whether each
+     is confirmed, pending, or already-cleared-but-pending.
+  4. *(Optional)* run **security access** if the ECU requires it for
+     the next step. Cantastic does not yet ship a built-in service for
+     Mode 0x27 because the seed→key derivation is brand-specific; you
+     can do the handshake manually via `Cantastic.Socket` until
+     Mode 0x27 lands with a `key_function` callback.
+  5. **Clear DTCs** with Mode 0x14 (`group_of_dtc: 0xFFFFFF` for all).
+  6. **Stop TesterPresent**, **leave the session** (Mode 0x10
+     `session_type: 0x01`, defaultSession), and optionally **reset the
+     ECU** with Mode 0x11.
+
+  Vintage Toyota (and some Mitsubishi / Hyundai) needs a different
+  flow:
+
+  1. **Read ECU identification** with Mode 0x1A (`id: 0x90` for VIN).
+  2. **Read live data** with Mode 0x21 — typical local identifiers are
+     0x05 engine load, 0x07 throttle position, 0x0F battery voltage
+     (varies per ECU; consult the platform's service manual).
+  3. **OBD2 standard modes** (0x01 / 0x03 / 0x04) work in parallel for
+     emission diagnostics; Toyota ECUs respond to both.
 
   ## Subscribing to responses
 
