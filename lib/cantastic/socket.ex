@@ -9,7 +9,8 @@ defmodule Cantastic.Socket do
   alias Cantastic.SocketMessage
 
   # Source: https://github.com/linux-can/linux/blob/56cfd2507d3e720f4b1dbf9513e00680516a0826/include/linux/socket.h#L193
-  @protocol_family 29 # PF_CAN == AF_CAN
+  # PF_CAN == AF_CAN
+  @protocol_family 29
 
   # Source: https://www.erlang.org/docs/26/man/socket#type-type
   @protocol_types %{
@@ -25,17 +26,18 @@ defmodule Cantastic.Socket do
 
   # Source: https://github.com/linux-can/can-utils/blob/6b46063eee805e0e680833da02fc16f15b92bf1e/include/linux/can.h#L239C9-L239C25
   @sol_can_base 100
-  #Source: https://github.com/linux-can/can-utils/blob/6b46063eee805e0e680833da02fc16f15b92bf1e/include/linux/can/isotp.h#L50
+  # Source: https://github.com/linux-can/can-utils/blob/6b46063eee805e0e680833da02fc16f15b92bf1e/include/linux/can/isotp.h#L50
   @sol_can_isotp @sol_can_base + @protocols[:isotp]
 
   # Source: https://github.com/linux-can/can-utils/blob/6b46063eee805e0e680833da02fc16f15b92bf1e/include/linux/can/isotp.h#L54
-  @can_isotp_opts  1
+  @can_isotp_opts 1
 
   # Source: https://github.com/linux-can/can-utils/blob/6b46063eee805e0e680833da02fc16f15b92bf1e/include/linux/can/isotp.h#L125
   @can_isotp_tx_padding 0x0004
 
   # Source: https://github.com/torvalds/linux/blob/0cc53520e68bea7fb80fdc6bdf8d226d1b6a98d9/include/uapi/linux/sockios.h#L153
-  @timestamp_flags 0x8906 # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
+  # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
+  @timestamp_flags 0x8906
 
   @sending_timeout 100
 
@@ -51,9 +53,8 @@ defmodule Cantastic.Socket do
   """
   def bind_raw(interface) do
     with {:ok, socket} <- open(:raw),
-          :ok          <- request_hardware_timestamping(socket),
-         {:ok, socket} <- bind(socket, interface)
-    do
+         :ok <- request_hardware_timestamping(socket),
+         {:ok, socket} <- bind(socket, interface) do
       {:ok, socket}
     else
       {:error, error} -> {:error, error}
@@ -72,10 +73,9 @@ defmodule Cantastic.Socket do
   """
   def bind_isotp(interface, request_frame_id, response_frame_id, tx_padding \\ nil) do
     with {:ok, socket} <- open(:isotp),
-         :ok           <- request_hardware_timestamping(socket),
-         :ok           <- request_isotp_padding(socket, tx_padding),
-         {:ok, socket} <- bind(socket, interface, request_frame_id, response_frame_id)
-    do
+         :ok <- request_hardware_timestamping(socket),
+         :ok <- request_isotp_padding(socket, tx_padding),
+         {:ok, socket} <- bind(socket, interface, request_frame_id, response_frame_id) do
       {:ok, socket}
     else
       {:error, error} -> {:error, error}
@@ -110,30 +110,41 @@ defmodule Cantastic.Socket do
       {:ok, %Cantastic.SocketMessage{} = message}
   """
   def receive_message(socket) do
-    [raw, timestamp_seconds, timestamp_usec] = case :socket.recvmsg(socket) do
-      {:ok, %{
-        iov: [raw],
-        ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-      }} -> [raw, timestamp_seconds, timestamp_usec]
-      {:ok, %{
-        iov: [raw],
-        ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-      }} -> [raw, timestamp_seconds, timestamp_usec]
-    end
+    [raw, timestamp_seconds, timestamp_usec] =
+      case :socket.recvmsg(socket) do
+        {:ok,
+         %{
+           iov: [raw],
+           ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+         }} ->
+          [raw, timestamp_seconds, timestamp_usec]
 
-    reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec # TODO return timestamp
+        {:ok,
+         %{
+           iov: [raw],
+           ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+         }} ->
+          [raw, timestamp_seconds, timestamp_usec]
+      end
+
+    # TODO return timestamp
+    reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec
     message = %SocketMessage{raw: raw, reception_timestamp: reception_timestamp}
     {:ok, message}
   end
 
   defp bind(socket, interface, request_frame_id \\ 0, response_frame_id \\ 0) do
-    with {:ok, address} <- build_raw_address(socket, interface, request_frame_id, response_frame_id),
-         :ok            <- :socket.bind(socket, %{:family => @protocol_family, :addr => address})
-    do
+    with {:ok, address} <-
+           build_raw_address(socket, interface, request_frame_id, response_frame_id),
+         :ok <- :socket.bind(socket, %{:family => @protocol_family, :addr => address}) do
       {:ok, socket}
     else
-      {:error, :enodev} -> {:error, "CAN interface not found by libsocketcan. Make sure it is configured and enabled first with '$ ip link show'"}
-      {:error, error} -> {:error, error}
+      {:error, :enodev} ->
+        {:error,
+         "CAN interface not found by libsocketcan. Make sure it is configured and enabled first with '$ ip link show'"}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -150,8 +161,10 @@ defmodule Cantastic.Socket do
     case tx_padding do
       nil ->
         :ok
+
       _ ->
-        flags          = @can_isotp_tx_padding
+        flags = @can_isotp_tx_padding
+
         iso_tp_options = <<
           flags::size(32)-little,
           0::size(32)-little,
@@ -160,13 +173,14 @@ defmodule Cantastic.Socket do
           0::size(8)-little,
           0::size(8)-little
         >>
+
         :socket.setopt_native(socket, {@sol_can_isotp, @can_isotp_opts}, iso_tp_options)
     end
-
   end
 
   defp build_raw_address(socket, interface, request_frame_id, response_frame_id) do
     charlist_interface = interface |> String.to_charlist()
+
     case :socket.ioctl(socket, :gifindex, charlist_interface) do
       {:ok, ifindex} ->
         # Source: https://elixirforum.com/t/erlang-socket-module-for-socketcan-on-nerves-device/57294/6
@@ -177,8 +191,11 @@ defmodule Cantastic.Socket do
           request_frame_id::size(32)-little,
           0::size(64)
         >>
+
         {:ok, address}
-      {:error, error} -> {:error, error}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 end

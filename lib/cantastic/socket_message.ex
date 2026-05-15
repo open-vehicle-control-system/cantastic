@@ -7,7 +7,7 @@ defmodule Cantastic.SocketMessage do
     * `:reception_timestamp`  The `DateTime` at which the frame was received by the kernel.
   """
 
-   defstruct [
+  defstruct [
     :raw,
     :reception_timestamp
   ]

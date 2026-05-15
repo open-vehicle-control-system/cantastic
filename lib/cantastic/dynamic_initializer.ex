@@ -17,7 +17,7 @@ defmodule Cantastic.DynamicInitializer do
 
   defp start_interfaces() do
     Interface.configure_children()
-    |> Enum.each(fn(child_spec) ->
+    |> Enum.each(fn child_spec ->
       {:ok, _child} = DynamicSupervisor.start_child(Cantastic.DynamicSupervisor, child_spec)
     end)
   end

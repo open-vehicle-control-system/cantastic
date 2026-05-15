@@ -2,6 +2,7 @@ defmodule Cantastic.Util do
   @moduledoc false
 
   def hex_to_bin(nil), do: nil
+
   def hex_to_bin(hex_data) do
     hex_data
     |> String.pad_leading(2, "0")
@@ -19,9 +20,8 @@ defmodule Cantastic.Util do
   end
 
   def string_to_integer(string) do
-    with padded   <- string |> String.pad_leading(2, "0"),
-         {int, _} <- padded |> Integer.parse()
-    do
+    with padded <- string |> String.pad_leading(2, "0"),
+         {int, _} <- padded |> Integer.parse() do
       int
     else
       :error -> {:error, "'#{string}' is not a valid integer"}
@@ -30,12 +30,14 @@ defmodule Cantastic.Util do
 
   def integer_to_bin_big(integer, size \\ 16)
   def integer_to_bin_big(nil, _size), do: nil
+
   def integer_to_bin_big(integer, size) do
     <<integer::big-integer-size(size)>>
   end
 
   def integer_to_bin_little(integer, size \\ 16)
   def integer_to_bin_little(nil, _size), do: nil
+
   def integer_to_bin_little(integer, size) do
     <<integer::little-integer-size(size)>>
   end

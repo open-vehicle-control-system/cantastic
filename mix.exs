@@ -33,9 +33,10 @@ defmodule Cantastic.MixProject do
       {:yaml_elixir, "~> 2.9"},
       {:jason, "~> 1.2"},
       {:decimal, "~> 2.1.1"},
-      {:espec, "~> 1.9.2", only: :test},
+      {:espec, "~> 1.10", only: :test},
       {:faker, "~> 0.18", only: :test},
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
