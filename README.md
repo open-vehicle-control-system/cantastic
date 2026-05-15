@@ -24,7 +24,7 @@ config :cantastic,
   can_network_mappings: "ovcs:vcan0,leaf_drive:vcan1,polo_drive:vcan2",
   setup_can_interfaces: true,
   otp_app: :vms_core,
-  priv_can_config_path: "polo_2007.yml",
+  priv_can_config_path: "can/vms.yml",
   enable_socketcand: true,
   socketcand_ip_interface: "wlan0"
 ```
@@ -318,17 +318,24 @@ can_networks:
 
 ```YAML
 #  frames/frame1.yml
-TODO
+---
+name: frame1
+id: 0x100
+frequency: 20
+signals:
+  - name: counter
+    kind: integer
+    value_start: 0
+    value_length: 8
 ```
 
-## Real world example
+## Real-world example
 
-Cantastic is used in the Open Vehicle Control System, you will find concrete usage example in this [repository](https://github.com/open-vehicle-control-system/ovcs)
+Cantastic powers the [Open Vehicle Control System](https://github.com/open-vehicle-control-system/ovcs).
+Concrete usage:
 
-More concretely:
-
-* A YAML [configuration file](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/priv/can/vehicles/ovcs1.yml)
-* An [emitter](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/components/nissan/leaf_aze0/inverter.ex#L41)
-* A [receiver](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/components/nissan/leaf_aze0/inverter.ex#L55)
-* A [frame reception handler](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/components/nissan/leaf_aze0/inverter.ex#L124)
-* An [OBD2 Request](https://github.com/open-vehicle-control-system/ovcs/blob/main/vms/core/lib/vms_core/vehicles/obd2.ex#L29)
+* CAN topology YAMLs: `vehicles/ovcs1/priv/can/vms.yml` (which `import!`s
+  shared component specs from `libraries/ovcs_can/priv/can/components/`).
+* An emitter / receiver / frame reception handler:
+  `vms/core/lib/vms_core/components/nissan/leaf_aze0/inverter.ex`.
+* OBD2 request definitions: `vehicles/obd2/priv/can/vms.yml`.
