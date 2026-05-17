@@ -100,9 +100,10 @@ defmodule Cantastic.Socket do
   end
 
   @doc """
-  Receive one `message` frame on the `socket`. This function will block indefinitely until a message is received.
+  Receive one `message` frame on the `socket`. This function will block until a message
+  is received or the underlying socket reports an error (timeout, closed, etc.).
 
-  Returns: `{:ok, %Cantastic.SocketMessage{} = message}`
+  Returns: `{:ok, %Cantastic.SocketMessage{} = message}` or `{:error, reason}`.
 
   ## Examples
 
@@ -110,27 +111,25 @@ defmodule Cantastic.Socket do
       {:ok, %Cantastic.SocketMessage{} = message}
   """
   def receive_message(socket) do
-    [raw, timestamp_seconds, timestamp_usec] =
-      case :socket.recvmsg(socket) do
-        {:ok,
-         %{
-           iov: [raw],
-           ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-         }} ->
-          [raw, timestamp_seconds, timestamp_usec]
+    case :socket.recvmsg(socket) do
+      {:ok, %{
+        iov: [raw],
+        ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+      }} ->
+        build_message(raw, timestamp_seconds, timestamp_usec)
+      {:ok, %{
+        iov: [raw],
+        ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+      }} ->
+        build_message(raw, timestamp_seconds, timestamp_usec)
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 
-        {:ok,
-         %{
-           iov: [raw],
-           ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-         }} ->
-          [raw, timestamp_seconds, timestamp_usec]
-      end
-
-    # TODO return timestamp
+  defp build_message(raw, timestamp_seconds, timestamp_usec) do
     reception_timestamp = timestamp_seconds * 1_000_000 + timestamp_usec
-    message = %SocketMessage{raw: raw, reception_timestamp: reception_timestamp}
-    {:ok, message}
+    {:ok, %SocketMessage{raw: raw, reception_timestamp: reception_timestamp}}
   end
 
   defp bind(socket, interface, request_frame_id \\ 0, response_frame_id \\ 0) do
