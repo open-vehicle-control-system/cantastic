@@ -77,19 +77,19 @@ defmodule Cantastic.OBD2.RequestSpecification do
   def validate_specification!(request_specificaton) do
     if is_nil(request_specificaton.name) do
       throw(
-        "[Yaml configuration error] OBD2 Request '#{request_specificaton.network_name}.#{request_specificaton.request_frame_id}' is missing a 'name'."
+        "[Yaml configuration error] OBD2 Request '#{request_specificaton.request_frame_id}' is missing a 'name'."
       )
     end
 
     if is_nil(request_specificaton.request_frame_id) do
       throw(
-        "[Yaml configuration error] OBD2 Request '#{request_specificaton.network_name}.#{request_specificaton.name}' is missing an 'request_frame_id'."
+        "[Yaml configuration error] OBD2 Request '#{request_specificaton.name}' is missing an 'request_frame_id'."
       )
     end
 
     if is_nil(request_specificaton.response_frame_id) do
       throw(
-        "[Yaml configuration error] OBD2 Request '#{request_specificaton.network_name}.#{request_specificaton.name}' is missing an 'response_frame_id'."
+        "[Yaml configuration error] OBD2 Request '#{request_specificaton.name}' is missing an 'response_frame_id'."
       )
     end
   end
