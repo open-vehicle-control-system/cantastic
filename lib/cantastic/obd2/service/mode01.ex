@@ -29,25 +29,23 @@ defmodule Cantastic.OBD2.Service.Mode01 do
 
   @impl true
   def decode_parameters(request_specification, raw_parameters) do
-    try do
-      parameters =
-        request_specification.parameter_specifications
-        |> Enum.reduce(%{raw_parameters: raw_parameters}, fn parameter_specification, acc ->
-          case Parameter.interpret(acc.raw_parameters, parameter_specification) do
-            {:ok, parameter, truncated} ->
-              acc
-              |> put_in([parameter.name], parameter)
-              |> put_in([:raw_parameters], truncated)
+    parameters =
+      request_specification.parameter_specifications
+      |> Enum.reduce(%{raw_parameters: raw_parameters}, fn parameter_specification, acc ->
+        case Parameter.interpret(acc.raw_parameters, parameter_specification) do
+          {:ok, parameter, truncated} ->
+            acc
+            |> put_in([parameter.name], parameter)
+            |> put_in([:raw_parameters], truncated)
 
-            {:error, reason} ->
-              throw({:decode_failed, parameter_specification.name, reason})
-          end
-        end)
+          {:error, reason} ->
+            throw({:decode_failed, parameter_specification.name, reason})
+        end
+      end)
 
-      {:ok, parameters}
-    catch
-      {:decode_failed, _parameter_name, _reason} = err ->
-        {:error, err}
-    end
+    {:ok, parameters}
+  catch
+    {:decode_failed, _parameter_name, _reason} = err ->
+      {:error, err}
   end
 end

@@ -40,32 +40,30 @@ defmodule Cantastic.OBD2.Service.Mode02 do
 
   @impl true
   def decode_parameters(request_specification, raw_parameters) do
-    try do
-      parameters =
-        request_specification.parameter_specifications
-        |> Enum.reduce(%{raw_parameters: raw_parameters}, fn parameter_specification, acc ->
-          case strip_frame_number(acc.raw_parameters) do
-            {:ok, without_frame_no} ->
-              case Parameter.interpret(without_frame_no, parameter_specification) do
-                {:ok, parameter, truncated} ->
-                  acc
-                  |> put_in([parameter.name], parameter)
-                  |> put_in([:raw_parameters], truncated)
+    parameters =
+      request_specification.parameter_specifications
+      |> Enum.reduce(%{raw_parameters: raw_parameters}, fn parameter_specification, acc ->
+        case strip_frame_number(acc.raw_parameters) do
+          {:ok, without_frame_no} ->
+            case Parameter.interpret(without_frame_no, parameter_specification) do
+              {:ok, parameter, truncated} ->
+                acc
+                |> put_in([parameter.name], parameter)
+                |> put_in([:raw_parameters], truncated)
 
-                {:error, reason} ->
-                  throw({:decode_failed, parameter_specification.name, reason})
-              end
+              {:error, reason} ->
+                throw({:decode_failed, parameter_specification.name, reason})
+            end
 
-            {:error, reason} ->
-              throw({:decode_failed, parameter_specification.name, reason})
-          end
-        end)
+          {:error, reason} ->
+            throw({:decode_failed, parameter_specification.name, reason})
+        end
+      end)
 
-      {:ok, parameters}
-    catch
-      {:decode_failed, _name, _reason} = err ->
-        {:error, err}
-    end
+    {:ok, parameters}
+  catch
+    {:decode_failed, _name, _reason} = err ->
+      {:error, err}
   end
 
   # Mode 0x02 sandwiches a frame-number byte between each PID and its value:
