@@ -112,16 +112,20 @@ defmodule Cantastic.Socket do
   """
   def receive_message(socket) do
     case :socket.recvmsg(socket) do
-      {:ok, %{
-        iov: [raw],
-        ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-      }} ->
+      {:ok,
+       %{
+         iov: [raw],
+         ctrl: [%{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+       }} ->
         build_message(raw, timestamp_seconds, timestamp_usec)
-      {:ok, %{
-        iov: [raw],
-        ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
-      }} ->
+
+      {:ok,
+       %{
+         iov: [raw],
+         ctrl: [_, %{type: :timestamp, value: %{sec: timestamp_seconds, usec: timestamp_usec}}]
+       }} ->
         build_message(raw, timestamp_seconds, timestamp_usec)
+
       {:error, reason} ->
         {:error, reason}
     end

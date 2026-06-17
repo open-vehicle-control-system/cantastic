@@ -22,9 +22,17 @@ defmodule Cantastic.OBD2.Request do
   end
 
   @impl true
-  def init(%{process_name:  _, request_specification: request_specification}) do
-    {:ok, socket}      = Socket.bind_isotp(request_specification.can_interface, request_specification.request_frame_id, request_specification.response_frame_id, 0x0)
+  def init(%{process_name: _, request_specification: request_specification}) do
+    {:ok, socket} =
+      Socket.bind_isotp(
+        request_specification.can_interface,
+        request_specification.request_frame_id,
+        request_specification.response_frame_id,
+        0x0
+      )
+
     {:ok, raw_request} = Codec.encode_request(request_specification)
+
     {:ok,
      %{
        socket: socket,
@@ -86,7 +94,8 @@ defmodule Cantastic.OBD2.Request do
   end
 
   defp send_to_error_handlers(response_handlers, error) do
-    response_handlers |> Enum.each(fn (response_handler) ->
+    response_handlers
+    |> Enum.each(fn response_handler ->
       Process.send(response_handler, {:handle_obd2_error, error}, [])
     end)
   end

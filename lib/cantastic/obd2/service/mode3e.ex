@@ -23,7 +23,9 @@ defmodule Cantastic.OBD2.Service.Mode3E do
 
   @impl true
   def encode_request(request_specification) do
-    sub_function = Map.get(request_specification.options || %{}, :sub_function, @default_sub_function)
+    sub_function =
+      Map.get(request_specification.options || %{}, :sub_function, @default_sub_function)
+
     {:ok, <<request_specification.mode::big-integer-size(8), sub_function::big-integer-size(8)>>}
   end
 

@@ -27,9 +27,13 @@ defmodule Cantastic.OBD2.Service.Mode02 do
   def encode_request(request_specification) do
     payload =
       request_specification.parameter_specifications
-      |> Enum.reduce(<<request_specification.mode::big-integer-size(8)>>, fn parameter_specification, acc ->
-        <<acc::bitstring, parameter_specification.id::integer-size(8), @frame_number::integer-size(8)>>
-      end)
+      |> Enum.reduce(
+        <<request_specification.mode::big-integer-size(8)>>,
+        fn parameter_specification, acc ->
+          <<acc::bitstring, parameter_specification.id::integer-size(8),
+            @frame_number::integer-size(8)>>
+        end
+      )
 
     {:ok, payload}
   end
@@ -68,7 +72,9 @@ defmodule Cantastic.OBD2.Service.Mode02 do
   #   <<pid::8, frame_no::8, value::bitstring, rest::bitstring>>
   # Strip the frame_no so the remaining buffer can be fed to the standard
   # `Parameter.interpret/2`, which expects `<<pid, value, rest>>`.
-  defp strip_frame_number(<<pid::integer-size(8), _frame_no::integer-size(8), payload::bitstring>>) do
+  defp strip_frame_number(
+         <<pid::integer-size(8), _frame_no::integer-size(8), payload::bitstring>>
+       ) do
     {:ok, <<pid::integer-size(8), payload::bitstring>>}
   end
 

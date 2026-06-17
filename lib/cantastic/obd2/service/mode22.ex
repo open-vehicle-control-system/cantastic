@@ -27,9 +27,12 @@ defmodule Cantastic.OBD2.Service.Mode22 do
   def encode_request(request_specification) do
     payload =
       request_specification.parameter_specifications
-      |> Enum.reduce(<<request_specification.mode::big-integer-size(8)>>, fn parameter_specification, acc ->
-        <<acc::bitstring, parameter_specification.id::big-integer-size(@id_size)>>
-      end)
+      |> Enum.reduce(
+        <<request_specification.mode::big-integer-size(8)>>,
+        fn parameter_specification, acc ->
+          <<acc::bitstring, parameter_specification.id::big-integer-size(@id_size)>>
+        end
+      )
 
     {:ok, payload}
   end

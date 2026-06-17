@@ -28,11 +28,10 @@ defmodule Cantastic.OBD2.Service.Mode14 do
 
   @impl true
   def encode_request(request_specification) do
-    group_of_dtc = Map.get(request_specification.options || %{}, :group_of_dtc, @default_group_of_dtc)
+    group_of_dtc =
+      Map.get(request_specification.options || %{}, :group_of_dtc, @default_group_of_dtc)
 
-    {:ok,
-     <<request_specification.mode::big-integer-size(8),
-       group_of_dtc::big-integer-size(24)>>}
+    {:ok, <<request_specification.mode::big-integer-size(8), group_of_dtc::big-integer-size(24)>>}
   end
 
   @impl true

@@ -44,18 +44,15 @@ defmodule Cantastic.OBD2.Service.Mode31 do
 
       true ->
         {:ok,
-         <<request_specification.mode::big-integer-size(8),
-           sub_function::big-integer-size(8),
-           routine_id::big-integer-size(16),
-           input_data::bitstring>>}
+         <<request_specification.mode::big-integer-size(8), sub_function::big-integer-size(8),
+           routine_id::big-integer-size(16), input_data::bitstring>>}
     end
   end
 
   @impl true
   def decode_parameters(request_specification, raw_parameters) do
     case raw_parameters do
-      <<_sub_function::big-integer-size(8),
-        _routine_id::big-integer-size(16),
+      <<_sub_function::big-integer-size(8), _routine_id::big-integer-size(16),
         status_record::bitstring>> ->
         parameter = %Parameter{
           name: "routine_status",

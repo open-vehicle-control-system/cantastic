@@ -10,7 +10,16 @@ defmodule Cantastic.OBD2.RequestSpecification do
   defdelegate get_and_update(term, key, fun), to: Map
   defdelegate pop(term, key), to: Map
 
-  @authorized_yaml_keys [:name, :request_frame_id, :response_frame_id, :frequency, :mode, :parameters, :options, :anchors]
+  @authorized_yaml_keys [
+    :name,
+    :request_frame_id,
+    :response_frame_id,
+    :frequency,
+    :mode,
+    :parameters,
+    :options,
+    :anchors
+  ]
 
   defstruct [
     :name,

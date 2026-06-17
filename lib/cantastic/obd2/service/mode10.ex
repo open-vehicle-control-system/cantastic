@@ -36,17 +36,17 @@ defmodule Cantastic.OBD2.Service.Mode10 do
 
   @impl true
   def encode_request(request_specification) do
-    session_type = Map.get(request_specification.options || %{}, :session_type, @default_session_type)
+    session_type =
+      Map.get(request_specification.options || %{}, :session_type, @default_session_type)
+
     {:ok, <<request_specification.mode::big-integer-size(8), session_type::big-integer-size(8)>>}
   end
 
   @impl true
   def decode_parameters(request_specification, raw_parameters) do
     case raw_parameters do
-      <<_session_type::big-integer-size(8),
-        p2_server_max::big-integer-size(16),
-        p2_star_server_max::big-integer-size(16),
-        _rest::bitstring>> ->
+      <<_session_type::big-integer-size(8), p2_server_max::big-integer-size(16),
+        p2_star_server_max::big-integer-size(16), _rest::bitstring>> ->
         parameters = %{
           "p2_server_max_ms" => %Parameter{
             name: "p2_server_max_ms",

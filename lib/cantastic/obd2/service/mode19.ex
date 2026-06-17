@@ -36,20 +36,21 @@ defmodule Cantastic.OBD2.Service.Mode19 do
 
   @impl true
   def encode_request(request_specification) do
-    sub_function = Map.get(request_specification.options || %{}, :sub_function, @default_sub_function)
-    status_mask = Map.get(request_specification.options || %{}, :status_mask, @default_status_mask)
+    sub_function =
+      Map.get(request_specification.options || %{}, :sub_function, @default_sub_function)
+
+    status_mask =
+      Map.get(request_specification.options || %{}, :status_mask, @default_status_mask)
 
     {:ok,
-     <<request_specification.mode::big-integer-size(8),
-       sub_function::big-integer-size(8),
+     <<request_specification.mode::big-integer-size(8), sub_function::big-integer-size(8),
        status_mask::big-integer-size(8)>>}
   end
 
   @impl true
   def decode_parameters(request_specification, raw_parameters) do
     case raw_parameters do
-      <<_sub_function::big-integer-size(8),
-        _availability_mask::big-integer-size(8),
+      <<_sub_function::big-integer-size(8), _availability_mask::big-integer-size(8),
         records::bitstring>> ->
         with {:ok, decoded} <- decode_records(records, []) do
           parameter = %Parameter{

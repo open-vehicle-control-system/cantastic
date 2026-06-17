@@ -23,6 +23,7 @@ defmodule Cantastic.MixProject do
 
   def application do
     base = [extra_applications: [:logger]]
+
     if Mix.env() == :test do
       base
     else

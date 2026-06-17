@@ -46,6 +46,7 @@ defmodule Cantastic.DTC do
   """
   def decode(<<system::2, first_digit::2, rest::12>>) do
     letter = Map.fetch!(@system_to_letter, system)
+
     hex =
       (first_digit * 0x1000 + rest)
       |> Integer.to_string(16)

@@ -32,8 +32,7 @@ defmodule Cantastic.OBD2.Service.Mode2E do
 
         {:ok,
          <<request_specification.mode::big-integer-size(8),
-           parameter_specification.id::big-integer-size(16),
-           data::bitstring>>}
+           parameter_specification.id::big-integer-size(16), data::bitstring>>}
 
       _ ->
         {:error, :mode_2e_requires_exactly_one_parameter}

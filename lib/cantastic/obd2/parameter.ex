@@ -64,8 +64,11 @@ defmodule Cantastic.OBD2.Parameter do
 
     try do
       value_length = parameter_specification.value_length
-      id           = parameter.id
-      <<^id::integer-size(id_size), raw_value::bitstring-size(value_length), truncated_raw_parameters::bitstring>> = raw_parameters
+      id = parameter.id
+
+      <<^id::integer-size(id_size), raw_value::bitstring-size(value_length),
+        truncated_raw_parameters::bitstring>> = raw_parameters
+
       value = decode_value(raw_value, parameter_specification, value_length)
       {:ok, %{parameter | value: value, raw_value: raw_value}, truncated_raw_parameters}
     rescue
