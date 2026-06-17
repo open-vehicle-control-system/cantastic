@@ -41,7 +41,8 @@ jobs:
 
       # cantastic's Application requires a configured CAN topology to
       # boot (see Cantastic.ConfigurationStore); --no-start skips it
-      # for tests that exercise pure functions.
-      - run: mix espec --no-start
+      # for tests that exercise pure functions. coveralls runs the espec
+      # suite under cover and prints a coverage summary in the log.
+      - run: mix coveralls --no-start
 
       - run: mix credo

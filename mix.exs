@@ -17,7 +17,15 @@ defmodule Cantastic.MixProject do
       ],
       source_url: "https://github.com/Spin42/cantastic",
       homepage_url: "https://github.com/Spin42/cantastic",
-      preferred_cli_env: [espec: :test]
+      test_coverage: [tool: ExCoveralls, test_task: "espec"],
+      preferred_cli_env: [
+        espec: :test,
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.html": :test,
+        "coveralls.json": :test,
+        "coveralls.github": :test
+      ]
     ]
   end
 
@@ -38,6 +46,7 @@ defmodule Cantastic.MixProject do
       {:decimal, "~> 2.1.1"},
       {:espec, "~> 1.10", only: :test},
       {:faker, "~> 0.18", only: :test},
+      {:excoveralls, "~> 0.18", only: :test},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
