@@ -90,6 +90,13 @@ defmodule Cantastic.Frame do
 
     frame = %{frame | name: frame_specification.name, signals: signals}
     {:ok, frame}
+  rescue
+    # A signal is pattern-matched out of the raw data by bit offset, so a
+    # frame shorter than the specification expects -- a truncated DLC, bus
+    # noise, a foreign device sharing an id -- raises here. That is one bad
+    # frame, not a reason to crash the network's receiver; report it so the
+    # caller can skip and log it.
+    error -> {:error, error}
   end
 
   @doc """
