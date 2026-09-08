@@ -37,8 +37,21 @@ defmodule Cantastic.Receiver do
     frame_specification = state.frame_specifications[frame.id]
 
     if not is_nil(frame_specification) do
-      {:ok, frame} = Frame.interpret(frame, frame_specification)
-      send_to_frame_handlers(frame_specification.frame_handlers, frame)
+      case Frame.interpret(frame, frame_specification) do
+        {:ok, frame} ->
+          send_to_frame_handlers(frame_specification.frame_handlers, frame)
+
+        {:error, reason} ->
+          # A single frame that does not fit its specification -- a short
+          # DLC, bus noise, a foreign device sharing an id -- must not
+          # crash the receiver, and with it every watcher and consumer on
+          # this network. Skip it, and name it so the mismatch is findable.
+          Logger.warning(
+            "#{state.network_name}: dropped 0x#{Integer.to_string(frame.id, 16)} " <>
+              "(#{byte_size(frame.raw_data)} data bytes) -- cannot decode against " <>
+              "'#{frame_specification.name}': #{inspect(reason)}"
+          )
+      end
     end
 
     receive_frame()
