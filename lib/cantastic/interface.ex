@@ -159,9 +159,11 @@ defmodule Cantastic.Interface do
       {:ok, frame_specification} =
         FrameSpecification.from_yaml(network_name, yaml_frame_specification, direction)
 
-      if Map.has_key?(frame_specifications, frame_specification.id) do
+      can_id = FrameSpecification.can_id(frame_specification)
+
+      if Map.has_key?(frame_specifications, can_id) do
         throw(
-          "[Yaml configuration error] frame id: 0x#{Util.integer_to_hex(frame_specification.id)} is duplicated, please ensure that you only use a frame ID once per network."
+          "[Yaml configuration error] frame id: 0x#{Util.integer_to_hex(frame_specification.id)}#{if frame_specification.extended, do: " (extended)", else: ""} is duplicated, please ensure that you only use a frame ID once per network."
         )
       end
 
@@ -171,7 +173,7 @@ defmodule Cantastic.Interface do
         )
       end
 
-      frame_specifications |> Map.put(frame_specification.id, frame_specification)
+      frame_specifications |> Map.put(can_id, frame_specification)
     end)
   end
 

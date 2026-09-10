@@ -9,8 +9,18 @@ defmodule Cantastic.FrameSpecification do
   defdelegate get_and_update(term, key, fun), to: Map
   defdelegate pop(term, key), to: Map
 
+  # SocketCAN's can_id is 32 bits: the identifier in the low 29 bits and
+  # CAN_EFF_FLAG on top when the frame uses the 29-bit (extended) format.
+  # A standard and an extended frame may carry the same numeric id on one
+  # bus and be two different frames, so specifications are keyed by the
+  # full can_id, not by the bare id.
+  @eff_flag 0x80000000
+  @max_standard_id 0x7FF
+  @max_extended_id 0x1FFFFFFF
+
   @authorized_yaml_keys [
     :id,
+    :extended,
     :name,
     :signals,
     :frequency,
@@ -34,6 +44,7 @@ defmodule Cantastic.FrameSpecification do
     :data_length,
     :byte_number,
     :checksum_signal_specification,
+    extended: false,
     checksum_required: false
   ]
 
@@ -63,6 +74,7 @@ defmodule Cantastic.FrameSpecification do
 
     frame_specification = %Cantastic.FrameSpecification{
       id: yaml_frame_specification.id,
+      extended: yaml_frame_specification[:extended] == true,
       name: yaml_frame_specification.name,
       network_name: network_name,
       frequency: yaml_frame_specification[:frequency],
@@ -110,12 +122,44 @@ defmodule Cantastic.FrameSpecification do
       )
     end
 
+    validate_id_range!(frame_specificaton)
+
     if is_nil(frame_specificaton.frequency) && direction == :emit do
       throw(
         "[Yaml configuration error] Frame '#{frame_specificaton.network_name}.#{frame_specificaton.name}' is missing a 'frequency'."
       )
     end
   end
+
+  defp validate_id_range!(%{extended: true} = spec) when spec.id > @max_extended_id do
+    throw(
+      "[Yaml configuration error] Frame '#{spec.network_name}.#{spec.name}' has id 0x#{Integer.to_string(spec.id, 16)}, above the 29-bit maximum 0x1FFFFFFF."
+    )
+  end
+
+  defp validate_id_range!(%{extended: false} = spec) when spec.id > @max_standard_id do
+    throw(
+      "[Yaml configuration error] Frame '#{spec.network_name}.#{spec.name}' has id 0x#{Integer.to_string(spec.id, 16)}, above the 11-bit maximum 0x7FF. Add 'extended: true' if it is a 29-bit frame."
+    )
+  end
+
+  defp validate_id_range!(_spec), do: :ok
+
+  @doc """
+  The SocketCAN `can_id` of a frame: its id, with `CAN_EFF_FLAG` set when
+  the frame is extended. This is what tells a standard frame from an
+  extended one carrying the same numeric id, so it is the key under which
+  specifications are stored and looked up.
+  """
+  def can_id(%{id: id, extended: true}), do: Bitwise.bor(id, @eff_flag)
+  def can_id(%{id: id}), do: id
+
+  @doc false
+  def can_id(id, true), do: Bitwise.bor(id, @eff_flag)
+  def can_id(id, _extended), do: id
+
+  @doc false
+  def eff_flag, do: @eff_flag
 
   defp signal_specifications(network_name, frame_id, frame_name, yaml_signal_specifications) do
     computed =

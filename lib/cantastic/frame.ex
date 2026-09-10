@@ -6,7 +6,8 @@ defmodule Cantastic.Frame do
 
     The attributes are the following:
 
-    * `:id` The frame id (`Integer`).
+    * `:id` The frame id (`Integer`): 11 bits, or 29 bits when `:extended` is true.
+    * `:extended` Whether the frame uses the 29-bit identifier format (CAN 2.0B).
     * `:name` The frame name.
     * `:byte_number` The number of data bytes in this frame.
     * `:raw_data` The raw bytes received on the CAN network.
@@ -27,6 +28,7 @@ defmodule Cantastic.Frame do
     :network_name,
     :created_at,
     :reception_timestamp,
+    extended: false,
     signals: %{}
   ]
 
@@ -36,6 +38,7 @@ defmodule Cantastic.Frame do
 
     frame = %__MODULE__{
       id: frame_specification.id,
+      extended: frame_specification.extended,
       network_name: frame_specification.network_name,
       raw_data: raw_data,
       byte_number: frame_specification.byte_number,
@@ -113,6 +116,10 @@ defmodule Cantastic.Frame do
   end
 
   @doc false
+  def format_id(%{extended: true} = frame) do
+    frame.id |> Integer.to_string(16) |> String.pad_leading(8, "0") |> Kernel.<>(" (ext)")
+  end
+
   def format_id(frame) do
     frame.id |> Util.integer_to_hex()
   end
@@ -131,7 +138,10 @@ defmodule Cantastic.Frame do
     byte_number = frame.byte_number
     padding = 8 - byte_number
 
-    <<frame.id::little-integer-size(16), 0::2*8, byte_number, 0::3*8>> <>
+    # struct can_frame: a 32-bit can_id (identifier plus flags, CAN_EFF_FLAG
+    # for an extended frame), the data length, three bytes of padding, and
+    # eight data bytes.
+    <<FrameSpecification.can_id(frame)::little-integer-size(32), byte_number, 0::3*8>> <>
       frame.raw_data <>
       <<0::padding*8>>
   end
