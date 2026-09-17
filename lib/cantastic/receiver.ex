@@ -4,10 +4,20 @@ defmodule Cantastic.Receiver do
   """
 
   use GenServer
-  alias Cantastic.{Frame, Interface, ConfigurationStore, ReceivedFrameWatcher, Socket}
+
+  alias Cantastic.{
+    Frame,
+    FrameSpecification,
+    Interface,
+    ConfigurationStore,
+    ReceivedFrameWatcher,
+    Socket
+  }
+
   require Logger
 
   @id_mask 0x1FFFFFFF
+  @eff_flag 0x80000000
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -34,7 +44,7 @@ defmodule Cantastic.Receiver do
   @impl true
   def handle_info(:receive_frame, state) do
     {:ok, frame} = receive_one_frame(state.network_name, state.socket)
-    frame_specification = state.frame_specifications[frame.id]
+    frame_specification = state.frame_specifications[FrameSpecification.can_id(frame)]
 
     if not is_nil(frame_specification) do
       case Frame.interpret(frame, frame_specification) do
@@ -47,7 +57,7 @@ defmodule Cantastic.Receiver do
           # crash the receiver, and with it every watcher and consumer on
           # this network. Skip it, and name it so the mismatch is findable.
           Logger.warning(
-            "#{state.network_name}: dropped 0x#{Integer.to_string(frame.id, 16)} " <>
+            "#{state.network_name}: dropped 0x#{Frame.format_id(frame)} " <>
               "(#{byte_size(frame.raw_data)} data bytes) -- cannot decode against " <>
               "'#{frame_specification.name}': #{inspect(reason)}"
           )
@@ -70,9 +80,11 @@ defmodule Cantastic.Receiver do
     >> = socket_message.raw
 
     id = Bitwise.band(id_and_flags, @id_mask)
+    extended = Bitwise.band(id_and_flags, @eff_flag) != 0
 
     frame = %Frame{
       id: id,
+      extended: extended,
       network_name: network_name,
       byte_number: byte_number,
       raw_data: raw_data,
@@ -106,7 +118,11 @@ defmodule Cantastic.Receiver do
 
         put_in(
           new_state,
-          [:frame_specifications, frame_specification.id, :frame_handlers],
+          [
+            :frame_specifications,
+            FrameSpecification.can_id(frame_specification),
+            :frame_handlers
+          ],
           frame_handlers
         )
       end)

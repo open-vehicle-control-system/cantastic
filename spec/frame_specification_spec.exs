@@ -11,8 +11,80 @@ defmodule Cantastic.FrameSpecificationSpec do
     end
   end
 
+  describe ".from_yaml/3 and the identifier format" do
+    let(:signals,
+      do: [%{name: "erpm", value_start: 0, value_length: 32, endianness: "big", sign: "signed"}]
+    )
+
+    it "is a standard frame by default" do
+      {:ok, spec} =
+        FrameSpecification.from_yaml(
+          :ovcs,
+          %{id: 0x1AA, name: "vms_command", signals: signals()},
+          :receive
+        )
+
+      expect(spec.extended) |> to(eq(false))
+      expect(FrameSpecification.can_id(spec)) |> to(eq(0x1AA))
+    end
+
+    it "keys an extended frame by its id with CAN_EFF_FLAG set" do
+      {:ok, spec} =
+        FrameSpecification.from_yaml(
+          :ovcs,
+          %{id: 0x903, extended: true, name: "vesc_status", signals: signals()},
+          :receive
+        )
+
+      expect(spec.extended) |> to(eq(true))
+      expect(FrameSpecification.can_id(spec)) |> to(eq(0x80000903))
+    end
+
+    it "tells a standard and an extended frame with the same numeric id apart" do
+      {:ok, standard} =
+        FrameSpecification.from_yaml(:ovcs, %{id: 0x003, name: "a", signals: signals()}, :receive)
+
+      {:ok, extended} =
+        FrameSpecification.from_yaml(
+          :ovcs,
+          %{id: 0x003, extended: true, name: "b", signals: signals()},
+          :receive
+        )
+
+      expect(FrameSpecification.can_id(standard))
+      |> not_to(eq(FrameSpecification.can_id(extended)))
+    end
+
+    it "refuses an id above 0x7FF unless the frame is extended" do
+      message =
+        thrown(fn ->
+          FrameSpecification.from_yaml(
+            :ovcs,
+            %{id: 0x903, name: "vesc_status", signals: signals()},
+            :receive
+          )
+        end)
+
+      expect(message) |> to(have("above the 11-bit maximum"))
+      expect(message) |> to(have("extended: true"))
+    end
+
+    it "refuses an extended id above 0x1FFFFFFF" do
+      message =
+        thrown(fn ->
+          FrameSpecification.from_yaml(
+            :ovcs,
+            %{id: 0x20000000, extended: true, name: "x", signals: signals()},
+            :receive
+          )
+        end)
+
+      expect(message) |> to(have("above the 29-bit maximum"))
+    end
+  end
+
   describe ".from_yaml/3 for a received frame" do
-    let :yaml,
+    let(:yaml,
       do: %{
         id: 0x100,
         name: "engine",
@@ -21,8 +93,15 @@ defmodule Cantastic.FrameSpecificationSpec do
           %{name: "temp", value_start: 16, value_length: 8}
         ]
       }
+    )
 
-    let :spec, do: (fn -> {:ok, s} = FrameSpecification.from_yaml(:powertrain, yaml(), :receive); s end).()
+    let(:spec,
+      do:
+        (fn ->
+           {:ok, s} = FrameSpecification.from_yaml(:powertrain, yaml(), :receive)
+           s
+         end).()
+    )
 
     it "carries id, name and network through" do
       expect(spec().id) |> to(eq(0x100))

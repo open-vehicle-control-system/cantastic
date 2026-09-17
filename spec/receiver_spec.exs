@@ -1,6 +1,15 @@
 defmodule Cantastic.ReceiverSpec do
   use ESpec
-  alias Cantastic.{Receiver, Frame, FrameSpecification, SignalSpecification, SocketMessage, FakeSocket}
+
+  alias Cantastic.{
+    Receiver,
+    Frame,
+    FrameSpecification,
+    SignalSpecification,
+    SocketMessage,
+    FakeSocket
+  }
+
   alias Decimal, as: D
 
   @receiver_process_name :CantasticTestNetworkReceiver
@@ -14,7 +23,7 @@ defmodule Cantastic.ReceiverSpec do
       byte_number::little-integer-size(8),
       0::24,
       data::binary,
-      0::padding * 8
+      0::padding*8
     >>
   end
 
@@ -48,6 +57,95 @@ defmodule Cantastic.ReceiverSpec do
     }
   end
 
+  defp vesc_status_frame_spec do
+    %FrameSpecification{
+      id: 0x903,
+      extended: true,
+      name: "vesc_status",
+      network_name: :test_network,
+      signal_specifications: [
+        %SignalSpecification{
+          name: "erpm",
+          network_name: :test_network,
+          frame_id: 0x903,
+          frame_name: "vesc_status",
+          kind: "integer",
+          precision: 0,
+          sign: "signed",
+          endianness: "big",
+          value_start: 0,
+          value_length: 32,
+          scale: D.new(1),
+          offset: D.new(0)
+        }
+      ],
+      frame_handlers: [],
+      data_length: 32,
+      byte_number: 4,
+      checksum_required: false
+    }
+  end
+
+  describe "receiving an extended frame" do
+    before do
+      allow(Cantastic.Socket)
+      |> to(
+        accept(:receive_message, fn _socket ->
+          raw = FakeSocket.pop_recv()
+          {:ok, %SocketMessage{raw: raw, reception_timestamp: 0}}
+        end)
+      )
+
+      {:ok, pid} =
+        Receiver.start_link(%{
+          process_name: @receiver_process_name,
+          frame_specifications: %{
+            0x100 => battery_status_frame_spec(),
+            0x80000903 => vesc_status_frame_spec()
+          },
+          socket: :fake_socket,
+          network_name: :test_network
+        })
+
+      {:shared, receiver_pid: pid}
+    end
+
+    finally do
+      pid = shared.receiver_pid
+
+      if Process.alive?(pid) do
+        Process.unlink(pid)
+        ref = Process.monitor(pid)
+        Process.exit(pid, :kill)
+
+        receive do
+          {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+        after
+          500 -> :ok
+        end
+      end
+    end
+
+    it "delivers it decoded, flagged as extended" do
+      :ok = Receiver.subscribe(self(), :test_network, "vesc_status")
+      # can_id with CAN_EFF_FLAG set, then 10000 ERPM big-endian.
+      FakeSocket.push_recv(socketcan_frame(0x80000903, <<0x00, 0x00, 0x27, 0x10>>))
+
+      assert_receive {:handle_frame,
+                      %Frame{name: "vesc_status", extended: true, signals: signals}},
+                     1_000
+
+      expect(signals["erpm"].value) |> to(eq(10_000))
+    end
+
+    it "does not confuse a standard frame carrying the same numeric id with it" do
+      :ok = Receiver.subscribe(self(), :test_network, "vesc_status")
+      FakeSocket.push_recv(socketcan_frame(0x903, <<0x00, 0x00, 0x27, 0x10>>))
+
+      refute_receive {:handle_frame, _}, 200
+    end
+  end
+
   describe "subscribing to a frame" do
     before do
       allow(Cantastic.Socket)
@@ -71,10 +169,12 @@ defmodule Cantastic.ReceiverSpec do
 
     finally do
       pid = shared.receiver_pid
+
       if Process.alive?(pid) do
         Process.unlink(pid)
         ref = Process.monitor(pid)
         Process.exit(pid, :kill)
+
         receive do
           {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
         after

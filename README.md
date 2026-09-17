@@ -142,7 +142,8 @@ can_networks:
 
 | Key | Description | Required | Default value |
 |-----|-------------|----------|---------------|
-| `:id` | The CAN Frame ID | True | |
+| `:id` | The CAN Frame ID: 11 bits (up to 0x7FF), or 29 bits when `:extended` is true | True | |
+| `:extended` | Whether the frame uses the 29-bit identifier format (CAN 2.0B "extended frame"). Standard and extended frames coexist on one bus, and a standard and an extended frame with the same numeric id are two different frames | False | false |
 | `:name` | The CAN Frame name, will be used in your own code to reference it | True |  |
 | `:frequency` | The frequency is milliseconds at which the frame should be emitted/is expected to be received | True for emitted frames, False for received frames |  |
 | `:allowed_frequency_leeway` | The tolerance in milliseconds to be added to the frequency by the `Cantastic.ReceivedFrameWatcher` when monitoring the frame frequency | False | 10 |
