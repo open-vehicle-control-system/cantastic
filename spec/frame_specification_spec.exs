@@ -160,6 +160,12 @@ defmodule Cantastic.FrameSpecificationSpec do
   end
 
   describe ".from_yaml/3 validation" do
+    it "accepts allowed_missing_frames_period and uses its value" do
+      yaml = %{id: 1, name: "f", signals: [], allowed_missing_frames_period: 1_234}
+      {:ok, spec} = FrameSpecification.from_yaml(:t, yaml, :receive)
+      expect(spec.allowed_missing_frames_period) |> to(eq(1_234))
+    end
+
     it "throws on an unauthorized frame key" do
       yaml = %{id: 1, name: "f", signals: [], bogus: 1}
       message = thrown(fn -> FrameSpecification.from_yaml(:t, yaml, :receive) end)

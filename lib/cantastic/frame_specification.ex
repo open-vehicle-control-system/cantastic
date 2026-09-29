@@ -26,6 +26,7 @@ defmodule Cantastic.FrameSpecification do
     :frequency,
     :allowed_frequency_leeway,
     :allowed_missing_frames,
+    :allowed_missing_frames_period,
     :required_on_time_frames,
     :anchors
   ]

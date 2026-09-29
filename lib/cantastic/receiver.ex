@@ -30,6 +30,14 @@ defmodule Cantastic.Receiver do
         socket: socket,
         network_name: network_name
       }) do
+    # The receiver spends its time blocked in the socket read, so it cannot
+    # answer calls. Subscribers validate frame names against this list in
+    # their own process instead.
+    :persistent_term.put(
+      declared_frame_names_key(network_name),
+      frame_specifications |> Map.values() |> Enum.map(& &1.name)
+    )
+
     receive_frame(200)
     Process.flag(:priority, :high)
 
@@ -96,35 +104,34 @@ defmodule Cantastic.Receiver do
   end
 
   @impl true
-  def handle_cast({:subscribe, frame_handler, frame_names, opts}, state) do
+  def handle_cast({:subscribe, frame_handler, frame_names}, state) do
     frame_names =
       case frame_names do
         "*" -> frame_names(state)
-        [_ | _] -> frame_names
+        _ -> frame_names
       end
-
-    subscribe_to_errors = opts[:errors] == true
 
     state =
       frame_names
       |> Enum.reduce(state, fn frame_name, new_state ->
-        {:ok, frame_specification} =
-          find_frame_specification_by_name(state.frame_specifications, frame_name)
+        case find_frame_specification_by_name(new_state.frame_specifications, frame_name) do
+          {:ok, frame_specification} ->
+            frame_handlers = [frame_handler | frame_specification.frame_handlers]
 
-        if subscribe_to_errors,
-          do: :ok = ReceivedFrameWatcher.subscribe(state.network_name, frame_name, frame_handler)
+            put_in(
+              new_state,
+              [
+                :frame_specifications,
+                FrameSpecification.can_id(frame_specification),
+                :frame_handlers
+              ],
+              frame_handlers
+            )
 
-        frame_handlers = [frame_handler | frame_specification.frame_handlers]
-
-        put_in(
-          new_state,
-          [
-            :frame_specifications,
-            FrameSpecification.can_id(frame_specification),
-            :frame_handlers
-          ],
-          frame_handlers
-        )
+          {:error, reason} ->
+            Logger.warning("#{reason}, subscription of #{inspect(frame_handler)} ignored")
+            new_state
+        end
       end)
 
     {:noreply, state}
@@ -137,8 +144,12 @@ defmodule Cantastic.Receiver do
         {:ok, frame_specification}
 
       nil ->
-        spec = frame_specifications |> Map.values() |> List.first()
-        network_name = Map.get(spec, :network_name, "UNKOWN_NETWORK")
+        network_name =
+          case frame_specifications |> Map.values() |> List.first() do
+            nil -> "UNKNOWN_NETWORK"
+            spec -> spec.network_name
+          end
+
         {:error, "Frame '#{frame_name}' not found for network '#{network_name}'"}
     end
   end
@@ -163,18 +174,20 @@ defmodule Cantastic.Receiver do
 
   ## Example
 
-      iex> Cantastic.Receiver.subscribe(self(), :my_network)
+      iex> Cantastic.Receiver.subscribe(self())
       :ok
 
-      iex> Cantastic.Receiver.subscribe(self(), :my_network, %{errors: true})
+      iex> Cantastic.Receiver.subscribe(self(), %{errors: true})
       :ok
 
   """
   def subscribe(frame_handler, opts \\ %{errors: false}) do
     ConfigurationStore.networks()
     |> Enum.each(fn network ->
-      receiver = Interface.receiver_process_name(network.network_name)
-      GenServer.cast(receiver, {:subscribe, frame_handler, "*", opts})
+      case declared_frame_names(network.network_name) do
+        nil -> cast_subscription(frame_handler, network.network_name, "*")
+        frame_names -> subscribe(frame_handler, network.network_name, frame_names, opts)
+      end
     end)
   end
 
@@ -183,30 +196,65 @@ defmodule Cantastic.Receiver do
 
   Passing `%{errors: true}` as `opt` will also subscribe the `frame_handler` to `handle_missing_frame` events that are triggered when the related frames are not received during the expected timeframe on the CAN network. (see also `Cantastic.ReceivedFrameWatcher`)
 
-  Returns `:ok`.
+  Returns `:ok`, or `{:error, reason}` without subscribing to any frame when one of `frame_names` is not declared in the network's `received_frames`.
 
   ## Example
 
-      iex> Cantastic.Receiver.subscribe(self(), :my_netowrk, "inverter_status")
+      iex> Cantastic.Receiver.subscribe(self(), :my_network, "inverter_status")
       :ok
 
-      iex> Cantastic.Receiver.subscribe(self(), :my_netowrk, "inverter_status", %{errors: true})
+      iex> Cantastic.Receiver.subscribe(self(), :my_network, "inverter_status", %{errors: true})
       :ok
 
-      iex> Cantastic.Receiver.subscribe(self(), :my_netowrk, ["inverter_status", "inverter_temperatures"])
+      iex> Cantastic.Receiver.subscribe(self(), :my_network, ["inverter_status", "inverter_temperatures"])
       :ok
+
+      iex> Cantastic.Receiver.subscribe(self(), :my_network, "not_a_declared_frame")
+      {:error, "Frame(s) 'not_a_declared_frame' not found for network 'my_network'"}
 
   """
   def subscribe(frame_handler, network_name, frame_names, opts \\ %{errors: false})
 
   def subscribe(frame_handler, network_name, frame_names, opts) when is_list(frame_names) do
-    receiver = Interface.receiver_process_name(network_name)
-    GenServer.cast(receiver, {:subscribe, frame_handler, frame_names, opts})
+    frame_names = Enum.uniq(frame_names)
+
+    case declared_frame_names(network_name) do
+      # No receiver has started for this network.
+      nil ->
+        cast_subscription(frame_handler, network_name, frame_names)
+
+      declared_frame_names ->
+        case frame_names -- declared_frame_names do
+          [] ->
+            if opts[:errors] == true,
+              do: :ok = ReceivedFrameWatcher.subscribe(network_name, frame_names, frame_handler)
+
+            cast_subscription(frame_handler, network_name, frame_names)
+
+          undeclared_frame_names ->
+            reason =
+              "Frame(s) '#{Enum.join(undeclared_frame_names, "', '")}' not found for network '#{network_name}'"
+
+            Logger.error("#{reason}, subscription of #{inspect(frame_handler)} refused")
+            {:error, reason}
+        end
+    end
   end
 
   def subscribe(frame_handler, network_name, frame_names, opts) do
     subscribe(frame_handler, network_name, [frame_names], opts)
   end
+
+  defp cast_subscription(frame_handler, network_name, frame_names) do
+    receiver = Interface.receiver_process_name(network_name)
+    GenServer.cast(receiver, {:subscribe, frame_handler, frame_names})
+  end
+
+  defp declared_frame_names(network_name) do
+    :persistent_term.get(declared_frame_names_key(network_name), nil)
+  end
+
+  defp declared_frame_names_key(network_name), do: {__MODULE__, network_name}
 
   @doc false
   def frame_names(state) do

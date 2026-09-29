@@ -149,10 +149,10 @@ defmodule Cantastic.ReceivedFrameWatcher do
   Returns `:ok`.
 
   ## Example
-      iex> Cantastic.ReceivedFrameWatcher.subscribe(:my_netowrk, "inverter_status", self())
+      iex> Cantastic.ReceivedFrameWatcher.subscribe(:my_network, "inverter_status", self())
       :ok
 
-      iex> Cantastic.Receiver.subscribe(:my_netowrk, ["inverter_status", "inverter_temperatures"], self())
+      iex> Cantastic.ReceivedFrameWatcher.subscribe(:my_network, ["inverter_status", "inverter_temperatures"], self())
       :ok
 
   """
@@ -174,10 +174,10 @@ defmodule Cantastic.ReceivedFrameWatcher do
   Returns `:ok`.
 
   ## Example
-      iex> Cantastic.ReceivedFrameWatcher.enable(:my_netowrk, "inverter_status")
+      iex> Cantastic.ReceivedFrameWatcher.enable(:my_network, "inverter_status")
       :ok
 
-      iex> Cantastic.Receiver.enable(:my_netowrk, ["inverter_status", "inverter_temperatures"], self())
+      iex> Cantastic.ReceivedFrameWatcher.enable(:my_network, ["inverter_status", "inverter_temperatures"])
       :ok
 
   """
@@ -199,10 +199,10 @@ defmodule Cantastic.ReceivedFrameWatcher do
   Returns `:ok`.
 
   ## Example
-      iex> Cantastic.ReceivedFrameWatcher.enable(:my_netowrk, "inverter_status")
+      iex> Cantastic.ReceivedFrameWatcher.disable(:my_network, "inverter_status")
       :ok
 
-      iex> Cantastic.Receiver.enable(:my_netowrk, ["inverter_status", "inverter_temperatures"], self())
+      iex> Cantastic.ReceivedFrameWatcher.disable(:my_network, ["inverter_status", "inverter_temperatures"])
       :ok
 
   """
@@ -219,13 +219,13 @@ defmodule Cantastic.ReceivedFrameWatcher do
   end
 
   @doc """
-  Returns `true` if the frame was received within the expected timeframe.
+  Tells whether the frame was received within the expected timeframe.
 
-  Returns `true` or `false`.
+  Returns `{:ok, true}` or `{:ok, false}`.
 
   ## Example
-      iex> Cantastic.ReceivedFrameWatcher.is_alive(:my_netowrk, "inverter_status")
-      true
+      iex> Cantastic.ReceivedFrameWatcher.is_alive?(:my_network, "inverter_status")
+      {:ok, true}
   """
   # credo:disable-for-next-line Credo.Check.Readability.PredicateFunctionNames
   def is_alive?(network_name, frame_name) do
