@@ -169,7 +169,7 @@ defmodule Cantastic.Emitter do
 
   ## Examples
 
-      iex> Cantastic.Emitter.configure(:network_name, %{
+      iex> Cantastic.Emitter.configure(:network_name, "frame_name", %{
         parameters_builder_function: fn (data) ->
           {
             :ok,
@@ -181,7 +181,7 @@ defmodule Cantastic.Emitter do
       })
       :ok
 
-      iex> Cantastic.Emitter.configure(:network_name, %{
+      iex> Cantastic.Emitter.configure(:network_name, "frame_name", %{
         parameters_builder_function: :default,
         initial_data: %{"gear" => "drive"},
         enable: true

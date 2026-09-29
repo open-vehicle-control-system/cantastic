@@ -151,6 +151,7 @@ can_networks:
 | `:allowed_missing_frames_period` | Timeframe in milliseconds during which `Cantastic.ReceivedFrameWatcher` is counting the number of missing frames | False | 5_000 |
 | `:required_on_time_frames` | The number of frames received at the expected frequency to consider a frame back to 'normal' | false | 5 |
 | `:signals` | An array of signals to be interpreted in this frame | False | [] |
+| `:anchors` | Ignored by Cantastic. A place to define YAML anchors (`&name`) that the frame's signals reuse through merge keys (`<<: *name`) | False | |
 
 
 ##### Example
@@ -178,7 +179,7 @@ can_networks:
 | `:name` | The signal name, will be used in your own code to reference it | True |  |
 | `:value_start` | The bit number where the raw signal starts | True | |
 | `:value_length` | The number of bits to use for this signal | True | |
-| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"`, `"static"`, `"enum"` | False | `"decimal"` |
+| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"`, `"static"`, `"enum"`, `"checksum"` (emitted frames only, see below) | False | `"decimal"` |
 | `:precision` | The precision to which a decimal signal should be rounded to | False | 2 |
 | `:sign` | Wheter the signal should be interpreted as a signed or unsigned integer | False | `"unsigned"` |
 | `:endianness` | The endianness to be used to interpret the signal | False | `"little"` |
@@ -212,7 +213,7 @@ can_networks:
           - name: boolean_signal
             value_start: 8
             value_length: 1
-            kind: mapping
+            kind: enum
             mapping:
               0x00: false
               0x01: true
@@ -222,6 +223,37 @@ can_networks:
             kind: static
             value: 0xAB
 
+```
+
+##### Checksum signals
+
+An emitted frame can declare at most one signal of kind `"checksum"`. In the emitter's data, the value for that signal is a function: it receives the frame's raw data built from all the other signals (a bitstring without the checksum bits) and returns an integer. That integer is encoded with the signal's `value_length`, `endianness`, `sign`, `scale` and `offset`, then inserted at `value_start`.
+
+```YAML
+emitted_frames:
+  - name: frame_with_crc
+    id: 0x200
+    frequency: 10
+    signals:
+      - name: counter
+        kind: integer
+        value_start: 0
+        value_length: 8
+      - name: crc
+        kind: checksum
+        value_start: 8
+        value_length: 8
+```
+
+```elixir
+Cantastic.Emitter.configure(:my_network, "frame_with_crc", %{
+  parameters_builder_function: :default,
+  initial_data: %{
+    "counter" => 0,
+    "crc" => fn <<counter>> -> Bitwise.bxor(counter, 0xFF) end
+  },
+  enable: true
+})
 ```
 
 #### OBD2 request definitions
@@ -238,10 +270,11 @@ module documentation.
 | `:name` | The OBD2 Request name, will be used in your own code to reference it | True |  |
 | `:request_frame_id` | The CAN Frame ID to be used for the OBD2 request | True | |
 | `:response_frame_id` | The CAN Frame ID of the frame used for the response | True | |
-| `:frequency` | The frequency is milliseconds at which the request should be emitted | True |  |
+| `:frequency` | The frequency is milliseconds at which the request should be emitted. An enabled request is sent once immediately, then at this frequency | True |  |
 | `:mode` | The OBD2 mode to be used | True |  |
 | `:parameters` | An array of parameters to be interpreted in this request | False | [] |
 | `:options` | A map of service-specific knobs (e.g. `session_type`, `routine_id`, `group_of_dtc`, `data`, `sub_function`, `status_mask`, `reset_type`). See the per-mode reference in `Cantastic.OBD2`. | False | `{}` |
+| `:anchors` | Ignored by Cantastic. A place to define YAML anchors (`&name`) that the request's parameters reuse through merge keys (`<<: *name`) | False | |
 
 ##### Example
 

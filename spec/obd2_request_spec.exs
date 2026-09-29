@@ -80,11 +80,11 @@ defmodule Cantastic.OBD2.RequestSpec do
       :ok
     end
 
-    defp start_request(parameters) do
+    defp start_request(parameters, frequency \\ 50) do
       {:ok, pid} =
         Request.start_link(%{
           process_name: @request_process_name,
-          request_specification: request_spec(parameters, 50)
+          request_specification: request_spec(parameters, frequency)
         })
 
       pid
@@ -187,6 +187,56 @@ defmodule Cantastic.OBD2.RequestSpec do
 
           assert_receive {:handle_obd2_error, {:nrc, 0x01, 0x31, :request_out_of_range}}, 1_000
           assert_receive {:handle_obd2_response, %Response{parameters: %{"speed" => %{value: 50}}}}, 1_000
+        after
+          shutdown(pid)
+        end
+      end
+    end
+
+    context "when the request is enabled" do
+      it "sends it immediately, without waiting for its frequency" do
+        pid = start_request([speed_parameter_spec()], 60_000)
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "current_speed")
+          FakeSocket.push_recv(<<0x41, 0x0D, 0x32>>)
+          :ok = Request.enable(:test_network, "current_speed")
+
+          assert_receive {:handle_obd2_response, %Response{parameters: %{"speed" => %{value: 50}}}}, 1_000
+          expect(length(FakeSocket.sent())) |> to(eq(1))
+        after
+          shutdown(pid)
+        end
+      end
+
+      it "is still sent when disabled again before its frequency elapses" do
+        pid = start_request([speed_parameter_spec()], 60_000)
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "current_speed")
+          FakeSocket.push_recv(<<0x41, 0x0D, 0x32>>)
+          :ok = Request.enable(:test_network, "current_speed")
+          :ok = Request.disable(:test_network, "current_speed")
+
+          assert_receive {:handle_obd2_response, _}, 1_000
+          expect(length(FakeSocket.sent())) |> to(eq(1))
+        after
+          shutdown(pid)
+        end
+      end
+
+      it "does not send an extra request when enabled twice" do
+        pid = start_request([speed_parameter_spec()], 60_000)
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "current_speed")
+          FakeSocket.push_recv(<<0x41, 0x0D, 0x32>>)
+          :ok = Request.enable(:test_network, "current_speed")
+          :ok = Request.enable(:test_network, "current_speed")
+
+          assert_receive {:handle_obd2_response, _}, 1_000
+          Process.sleep(100)
+          expect(length(FakeSocket.sent())) |> to(eq(1))
         after
           shutdown(pid)
         end

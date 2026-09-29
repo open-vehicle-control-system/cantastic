@@ -209,6 +209,39 @@ defmodule Cantastic.ReceiverSpec do
       end
     end
 
+    context "when subscribing to a frame the network does not declare" do
+      it "returns an error to the caller and keeps the receiver alive" do
+        expect(Receiver.subscribe(self(), :test_network, "not_a_frame"))
+        |> to(eq({:error, "Frame(s) 'not_a_frame' not found for network 'test_network'"}))
+
+        Process.sleep(50)
+        expect(Process.alive?(shared.receiver_pid)) |> to(be_true())
+
+        :ok = Receiver.subscribe(self(), :test_network, "battery_status")
+        FakeSocket.push_recv(socketcan_frame(0x100, <<0x32, 0x00>>))
+        assert_receive {:handle_frame, %Frame{name: "battery_status"}}, 1_000
+      end
+
+      it "subscribes to none of the listed frames when one of them is undeclared" do
+        expect(Receiver.subscribe(self(), :test_network, ["battery_status", "not_a_frame"]))
+        |> to(eq({:error, "Frame(s) 'not_a_frame' not found for network 'test_network'"}))
+
+        FakeSocket.push_recv(socketcan_frame(0x100, <<0x32, 0x00>>))
+        refute_receive {:handle_frame, _}, 200
+        expect(Process.alive?(shared.receiver_pid)) |> to(be_true())
+      end
+    end
+
+    context "when a frame is listed twice" do
+      it "subscribes once" do
+        :ok = Receiver.subscribe(self(), :test_network, ["battery_status", "battery_status"])
+        FakeSocket.push_recv(socketcan_frame(0x100, <<0x32, 0x00>>))
+
+        assert_receive {:handle_frame, %Frame{name: "battery_status"}}, 1_000
+        refute_receive {:handle_frame, _}, 200
+      end
+    end
+
     context "when several frames arrive in succession" do
       it "delivers a :handle_frame message for each of them in order" do
         :ok = Receiver.subscribe(self(), :test_network, "battery_status")

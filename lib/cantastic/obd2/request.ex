@@ -61,6 +61,10 @@ defmodule Cantastic.OBD2.Request do
   def handle_cast(:enable, state) do
     case state.sending_timer do
       nil ->
+        # The interval only fires after a full period, so the first request
+        # goes out now: a request enabled briefly (or with a long frequency)
+        # would otherwise never be sent.
+        send(self(), :send_request)
         {:ok, timer} = :timer.send_interval(state.request_specification.frequency, :send_request)
         {:noreply, %{state | sending_timer: timer}}
 
@@ -101,7 +105,7 @@ defmodule Cantastic.OBD2.Request do
   end
 
   @doc """
-  Enable the OBD2 request(s), the request(s) is/are then emitted on the bus at the predefined frequency.
+  Enable the OBD2 request(s), the request(s) is/are then emitted on the bus once immediately, then at the predefined frequency.
 
   Returns: `:ok`
 
@@ -157,7 +161,7 @@ defmodule Cantastic.OBD2.Request do
 
   ## Example
 
-      iex> Cantastic.OBD2.Request(self(), :my_netowrk, "current_speed_and_rpm")
+      iex> Cantastic.OBD2.Request.subscribe(self(), :my_network, "current_speed_and_rpm")
       :ok
   """
   def subscribe(response_handler, network_name, request_name) do
