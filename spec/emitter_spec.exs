@@ -169,6 +169,41 @@ defmodule Cantastic.EmitterSpec do
       end
     end
 
+    context "when enabled" do
+      it "emits once per period" do
+        :ok =
+          Emitter.configure(:test_network, "drive_request", %{
+            parameters_builder_function: :default,
+            initial_data: %{"throttle" => 0, "brake" => 0},
+            enable: true
+          })
+
+        Process.sleep(525)
+
+        expect(length(FakeSocket.sent())) |> to(be_close_to(10, 1))
+      end
+    end
+
+    context "when disabled and enabled again in quick succession" do
+      it "keeps a single period" do
+        :ok =
+          Emitter.configure(:test_network, "drive_request", %{
+            parameters_builder_function: :default,
+            initial_data: %{"throttle" => 0, "brake" => 0},
+            enable: true
+          })
+
+        Process.sleep(45)
+        :ok = Emitter.disable(:test_network, "drive_request")
+        :ok = Emitter.enable(:test_network, "drive_request")
+        Process.sleep(10)
+        count_after_reenable = length(FakeSocket.sent())
+        Process.sleep(500)
+
+        expect(length(FakeSocket.sent()) - count_after_reenable) |> to(be_close_to(10, 1))
+      end
+    end
+
     context "when forward/2 routes an existing frame's bytes" do
       let :forwarded_frame, do: %Frame{
         id: 0x200,
@@ -191,6 +226,59 @@ defmodule Cantastic.EmitterSpec do
         [raw] = FakeSocket.sent()
         expect(data_payload(raw)) |> to(eq(<<0x77, 0x88, 0, 0, 0, 0, 0, 0>>))
       end
+    end
+  end
+
+  describe "when sending takes longer than the period" do
+    before do
+      allow(Cantastic.Socket)
+      |> to(
+        accept(:send, fn _socket, raw ->
+          Process.sleep(60)
+          FakeSocket.record_send(raw)
+          :ok
+        end)
+      )
+
+      {:ok, pid} =
+        Emitter.start_link(%{
+          process_name: @emitter_process_name,
+          frame_specification: drive_request_frame_spec(20),
+          socket: :fake_socket,
+          network_name: :test_network
+        })
+
+      :ok =
+        Emitter.configure(:test_network, "drive_request", %{
+          parameters_builder_function: :default,
+          initial_data: %{"throttle" => 0, "brake" => 0},
+          enable: true
+        })
+
+      {:shared, emitter_pid: pid}
+    end
+
+    finally do
+      pid = shared.emitter_pid
+      Process.unlink(pid)
+      Process.exit(pid, :kill)
+    end
+
+    it "skips the overrun periods instead of queueing them" do
+      Process.sleep(500)
+
+      {:message_queue_len, queue_length} = Process.info(shared.emitter_pid, :message_queue_len)
+      expect(queue_length <= 1) |> to(be_true())
+      expect(length(FakeSocket.sent())) |> to(be_close_to(8, 2))
+    end
+
+    it "answers update/3 within one send" do
+      Process.sleep(200)
+
+      {elapsed_us, :ok} =
+        :timer.tc(fn -> Emitter.update(:test_network, "drive_request", & &1) end)
+
+      expect(elapsed_us < 100_000) |> to(be_true())
     end
   end
 end
