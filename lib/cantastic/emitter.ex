@@ -18,7 +18,10 @@ defmodule Cantastic.Emitter do
 
   """
   use GenServer
+  require Logger
   alias Cantastic.{Interface, Frame, Socket}
+
+  @backlog_report_interval_ms 5_000
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -41,7 +44,9 @@ defmodule Cantastic.Emitter do
        frequency: frame_specification.frequency,
        frame_specification: frame_specification,
        failed_sending_count: 0,
-       last_sending_error_reason: nil
+       last_sending_error_reason: nil,
+       coalesced_sending_count: 0,
+       last_backlog_report_at: nil
      }}
   end
 
@@ -50,7 +55,7 @@ defmodule Cantastic.Emitter do
     {:ok, parameters, data} = state.parameters_builder_function.(state.data)
     {:ok, raw_frame} = Frame.build_raw(state.frame_specification, parameters)
     state = send_raw(state, raw_frame)
-    {:noreply, %{state | data: data}}
+    {:noreply, %{state | data: data} |> coalesce_pending_sends()}
   end
 
   @impl true
@@ -256,6 +261,70 @@ defmodule Cantastic.Emitter do
   def forward(network_name, frame) do
     emitter = Interface.emitter_process_name(network_name, frame.name)
     GenServer.cast(emitter, {:forward, frame})
+  end
+
+  # Sends that queued up while this one ran are dropped: the next one
+  # carries the same data, and an emitter that falls behind its period
+  # must not grow its mailbox without bound.
+  defp coalesce_pending_sends(state) do
+    case flush_pending_sends(0) do
+      0 ->
+        state
+
+      dropped ->
+        report_backlog(
+          %{state | coalesced_sending_count: state.coalesced_sending_count + dropped},
+          dropped
+        )
+    end
+  end
+
+  defp flush_pending_sends(dropped) do
+    receive do
+      :send_frame -> flush_pending_sends(dropped + 1)
+    after
+      0 -> dropped
+    end
+  end
+
+  defp report_backlog(state, dropped) do
+    now = System.monotonic_time(:millisecond)
+
+    if is_nil(state.last_backlog_report_at) or
+         now - state.last_backlog_report_at >= @backlog_report_interval_ms do
+      {:message_queue_len, queue_length} = Process.info(self(), :message_queue_len)
+
+      Logger.warning(
+        "[Cantastic] Emitter #{state.network_name}.#{state.frame_specification.name} fell behind " <>
+          "its #{state.frequency} ms period: dropped #{dropped} queued sends " <>
+          "(#{state.coalesced_sending_count} since start), #{queue_length} messages still queued" <>
+          pending_message_kinds(queue_length)
+      )
+
+      %{state | last_backlog_report_at: now}
+    else
+      state
+    end
+  end
+
+  # Listing the queue copies it, so only a small one is listed.
+  defp pending_message_kinds(queue_length) when queue_length > 10_000, do: ""
+  defp pending_message_kinds(0), do: ""
+
+  defp pending_message_kinds(_queue_length) do
+    {:messages, messages} = Process.info(self(), :messages)
+
+    messages
+    |> Enum.take(100)
+    |> Enum.frequencies_by(fn
+      {:"$gen_call", _from, {kind, _}} -> {:call, kind}
+      {:"$gen_cast", {kind, _}} -> {:cast, kind}
+      {:"$gen_cast", kind} -> {:cast, kind}
+      other when is_atom(other) -> other
+      other when is_tuple(other) -> elem(other, 0)
+      _other -> :other
+    end)
+    |> then(&(": " <> inspect(&1)))
   end
 
   defp send_raw(state, raw_frame) do
