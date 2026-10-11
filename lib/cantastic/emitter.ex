@@ -19,7 +19,7 @@ defmodule Cantastic.Emitter do
   """
   use GenServer
   require Logger
-  alias Cantastic.{Interface, Frame, Socket}
+  alias Cantastic.{Interface, Frame, Socket, Ticker}
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -37,9 +37,7 @@ defmodule Cantastic.Emitter do
        socket: socket,
        network_name: network_name,
        parameters_builder_function: :default,
-       sending_timer: nil,
-       tick_ref: nil,
-       next_tick_at_ms: nil,
+       ticker: nil,
        data: %{},
        frequency: frame_specification.frequency,
        frame_specification: frame_specification,
@@ -50,12 +48,12 @@ defmodule Cantastic.Emitter do
   end
 
   @impl true
-  def handle_info({:tick, tick_ref}, %{tick_ref: tick_ref} = state) do
-    state = state |> emit() |> schedule_next_tick()
-    {:noreply, state}
+  def handle_info({:tick, ref}, %{ticker: %Ticker{ref: ref}} = state) do
+    state = emit(state)
+    {:noreply, %{state | ticker: Ticker.next(state.ticker)}}
   end
 
-  # A tick of a timer cancelled by disable/2.
+  # A tick of a ticker cancelled by disable/2.
   def handle_info({:tick, _stale_tick_ref}, state) do
     {:noreply, state}
   end
@@ -73,31 +71,15 @@ defmodule Cantastic.Emitter do
 
   @impl true
   def handle_cast(:enable, state) do
-    case state.tick_ref do
-      nil ->
-        state = %{
-          state
-          | tick_ref: make_ref(),
-            next_tick_at_ms: System.monotonic_time(:millisecond)
-        }
-
-        {:noreply, schedule_next_tick(state)}
-
-      _ ->
-        {:noreply, state}
+    case state.ticker do
+      nil -> {:noreply, %{state | ticker: Ticker.start(state.frequency)}}
+      _ -> {:noreply, state}
     end
   end
 
   @impl true
   def handle_cast(:disable, state) do
-    case state.sending_timer do
-      nil ->
-        {:noreply, state}
-
-      sending_timer ->
-        Process.cancel_timer(sending_timer)
-        {:noreply, %{state | sending_timer: nil, tick_ref: nil, next_tick_at_ms: nil}}
-    end
+    {:noreply, %{state | ticker: Ticker.cancel(state.ticker)}}
   end
 
   @impl true
@@ -281,21 +263,6 @@ defmodule Cantastic.Emitter do
     {:ok, raw_frame} = Frame.build_raw(state.frame_specification, parameters)
     state = send_raw(state, raw_frame)
     %{state | data: data}
-  end
-
-  # Ticks stay on the grid started by enable/2; overrun periods are skipped.
-  defp schedule_next_tick(state) do
-    now_ms = System.monotonic_time(:millisecond)
-    next_tick_at_ms = state.next_tick_at_ms + state.frequency
-
-    next_tick_at_ms =
-      if next_tick_at_ms > now_ms,
-        do: next_tick_at_ms,
-        else:
-          next_tick_at_ms + (div(now_ms - next_tick_at_ms, state.frequency) + 1) * state.frequency
-
-    timer = Process.send_after(self(), {:tick, state.tick_ref}, next_tick_at_ms, abs: true)
-    %{state | sending_timer: timer, next_tick_at_ms: next_tick_at_ms}
   end
 
   defp send_raw(state, raw_frame) do

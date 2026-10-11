@@ -14,7 +14,7 @@ defmodule Cantastic.OBD2.Request do
 
   use GenServer
   require Logger
-  alias Cantastic.{Interface, Socket}
+  alias Cantastic.{Interface, Socket, Ticker}
   alias Cantastic.OBD2.{Codec, Response}
 
   @response_timeout_ms 1_000
@@ -40,20 +40,18 @@ defmodule Cantastic.OBD2.Request do
        socket: socket,
        request_specification: request_specification,
        response_handlers: [],
-       sending_timer: nil,
-       tick_ref: nil,
-       next_tick_at_ms: nil,
+       ticker: nil,
        raw_request: raw_request
      }}
   end
 
   @impl true
-  def handle_info({:tick, tick_ref}, %{tick_ref: tick_ref} = state) do
+  def handle_info({:tick, ref}, %{ticker: %Ticker{ref: ref}} = state) do
     send_request(state)
-    {:noreply, schedule_next_tick(state)}
+    {:noreply, %{state | ticker: Ticker.next(state.ticker)}}
   end
 
-  # A tick of a timer cancelled by disable/2.
+  # A tick of a ticker cancelled by disable/2.
   def handle_info({:tick, _stale_tick_ref}, state) do
     {:noreply, state}
   end
@@ -65,20 +63,13 @@ defmodule Cantastic.OBD2.Request do
 
   @impl true
   def handle_cast(:enable, state) do
-    case state.tick_ref do
+    case state.ticker do
       nil ->
         # The first tick only fires after a full period, so the first request
         # goes out now: a request enabled briefly (or with a long frequency)
         # would otherwise never be sent.
         send(self(), :send_request)
-
-        state = %{
-          state
-          | tick_ref: make_ref(),
-            next_tick_at_ms: System.monotonic_time(:millisecond)
-        }
-
-        {:noreply, schedule_next_tick(state)}
+        {:noreply, %{state | ticker: Ticker.start(state.request_specification.frequency)}}
 
       _ ->
         {:noreply, state}
@@ -86,14 +77,7 @@ defmodule Cantastic.OBD2.Request do
   end
 
   def handle_cast(:disable, state) do
-    case state.sending_timer do
-      nil ->
-        {:noreply, state}
-
-      sending_timer ->
-        Process.cancel_timer(sending_timer)
-        {:noreply, %{state | sending_timer: nil, tick_ref: nil, next_tick_at_ms: nil}}
-    end
+    {:noreply, %{state | ticker: Ticker.cancel(state.ticker)}}
   end
 
   @impl true
@@ -110,21 +94,6 @@ defmodule Cantastic.OBD2.Request do
     else
       {:error, error} -> send_to_error_handlers(state.response_handlers, error)
     end
-  end
-
-  # Ticks stay on the grid started by enable/2; overrun periods are skipped.
-  defp schedule_next_tick(state) do
-    frequency = state.request_specification.frequency
-    now_ms = System.monotonic_time(:millisecond)
-    next_tick_at_ms = state.next_tick_at_ms + frequency
-
-    next_tick_at_ms =
-      if next_tick_at_ms > now_ms,
-        do: next_tick_at_ms,
-        else: next_tick_at_ms + (div(now_ms - next_tick_at_ms, frequency) + 1) * frequency
-
-    timer = Process.send_after(self(), {:tick, state.tick_ref}, next_tick_at_ms, abs: true)
-    %{state | sending_timer: timer, next_tick_at_ms: next_tick_at_ms}
   end
 
   defp send_to_response_handlers(response_handlers, response) do
