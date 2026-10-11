@@ -1,7 +1,7 @@
 defmodule Cantastic.OBD2.KwpSpec do
   use ESpec
   alias Cantastic.OBD2.{Request, RequestSpecification, ParameterSpecification, Response}
-  alias Cantastic.{SocketMessage, FakeSocket}
+  alias Cantastic.FakeSocket
   alias Decimal, as: D
 
   defp param(overrides) do
@@ -79,9 +79,8 @@ defmodule Cantastic.OBD2.KwpSpec do
 
     allow(Cantastic.Socket)
     |> to(
-      accept(:receive_message, fn _socket ->
-        raw = FakeSocket.pop_recv()
-        {:ok, %SocketMessage{raw: raw, reception_timestamp: 0}}
+      accept(:receive_message, fn _socket, timeout_ms ->
+        FakeSocket.receive_message(timeout_ms)
       end)
     )
 
