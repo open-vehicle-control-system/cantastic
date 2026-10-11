@@ -8,7 +8,7 @@ defmodule Cantastic.OBD2.Response do
 
     * `:request_name` The OBD2 request's name, as defined in your YAML file.
     * `:mode` The OBD2 mode, as defined in your YAML file.
-    * `:reception_timestamp`  The `DateTime` at which the frame was received by the kernel.
+    * `:reception_timestamp`  When the kernel received the frame, in microseconds since the Unix epoch. It follows the wall clock, so it can step when the system time is set: measure intervals with `System.monotonic_time/1` instead.
     * `:parameters` A `Map` of the parameters contained in this response.
   """
 
