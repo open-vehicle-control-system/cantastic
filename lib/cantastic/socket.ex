@@ -35,10 +35,6 @@ defmodule Cantastic.Socket do
   # Source: https://github.com/linux-can/can-utils/blob/6b46063eee805e0e680833da02fc16f15b92bf1e/include/linux/can/isotp.h#L125
   @can_isotp_tx_padding 0x0004
 
-  # Source: https://github.com/torvalds/linux/blob/0cc53520e68bea7fb80fdc6bdf8d226d1b6a98d9/include/uapi/linux/sockios.h#L153
-  # SIOCGSTAMP: 0x8906 - SIOCGSTAMPNS: 0x8907 - SIOCSHWTSTAMP": 0x89b0 - SIOCGHWTSTAMP: 0x89b1
-  @timestamp_flags 0x8906
-
   @sending_timeout 100
 
   @doc """
@@ -53,7 +49,7 @@ defmodule Cantastic.Socket do
   """
   def bind_raw(interface) do
     with {:ok, socket} <- open(:raw),
-         :ok <- request_hardware_timestamping(socket),
+         :ok <- enable_reception_timestamps(socket),
          {:ok, socket} <- bind(socket, interface) do
       {:ok, socket}
     else
@@ -73,7 +69,7 @@ defmodule Cantastic.Socket do
   """
   def bind_isotp(interface, request_frame_id, response_frame_id, tx_padding \\ nil) do
     with {:ok, socket} <- open(:isotp),
-         :ok <- request_hardware_timestamping(socket),
+         :ok <- enable_reception_timestamps(socket),
          :ok <- request_isotp_padding(socket, tx_padding),
          {:ok, socket} <- bind(socket, interface, request_frame_id, response_frame_id) do
       {:ok, socket}
@@ -158,8 +154,9 @@ defmodule Cantastic.Socket do
     :socket.open(@protocol_family, @protocol_types[protocol], @protocols[protocol])
   end
 
-  defp request_hardware_timestamping(socket) do
-    :socket.setopt_native(socket, {:socket, @protocol_family}, @timestamp_flags)
+  # SO_TIMESTAMP: the kernel stamps each received frame with the wall clock.
+  defp enable_reception_timestamps(socket) do
+    :socket.setopt(socket, {:socket, :timestamp}, true)
   end
 
   defp request_isotp_padding(socket, tx_padding) do
