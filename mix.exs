@@ -15,8 +15,8 @@ defmodule Cantastic.MixProject do
         extras: ["README.md", "LICENCE.txt"],
         main: "readme"
       ],
-      source_url: "https://github.com/Spin42/cantastic",
-      homepage_url: "https://github.com/Spin42/cantastic",
+      source_url: "https://github.com/open-vehicle-control-system/cantastic",
+      homepage_url: "https://github.com/open-vehicle-control-system/cantastic",
       test_coverage: [tool: ExCoveralls, test_task: "espec"]
     ]
   end
@@ -60,7 +60,7 @@ defmodule Cantastic.MixProject do
   defp package() do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/Spin42/cantastic"}
+      links: %{"GitHub" => "https://github.com/open-vehicle-control-system/cantastic"}
     ]
   end
 end
