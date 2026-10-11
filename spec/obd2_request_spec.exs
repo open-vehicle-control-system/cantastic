@@ -1,7 +1,7 @@
 defmodule Cantastic.OBD2.RequestSpec do
   use ESpec
   alias Cantastic.OBD2.{Request, RequestSpecification, ParameterSpecification, Response}
-  alias Cantastic.{SocketMessage, FakeSocket}
+  alias Cantastic.FakeSocket
   alias Decimal, as: D
 
   @request_process_name :CantasticTestNetworkCurrentSpeedOBD2Request
@@ -71,9 +71,8 @@ defmodule Cantastic.OBD2.RequestSpec do
 
       allow(Cantastic.Socket)
       |> to(
-        accept(:receive_message, fn _socket ->
-          raw = FakeSocket.pop_recv()
-          {:ok, %SocketMessage{raw: raw, reception_timestamp: 0}}
+        accept(:receive_message, fn _socket, timeout_ms ->
+          FakeSocket.receive_message(timeout_ms)
         end)
       )
 
@@ -237,6 +236,56 @@ defmodule Cantastic.OBD2.RequestSpec do
           assert_receive {:handle_obd2_response, _}, 1_000
           Process.sleep(100)
           expect(length(FakeSocket.sent())) |> to(eq(1))
+        after
+          shutdown(pid)
+        end
+      end
+    end
+
+    context "when the ECU does not answer" do
+      it "reports a timeout, skips the overrun periods and still handles disable" do
+        pid = start_request([speed_parameter_spec()], 100)
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "current_speed")
+          :ok = Request.enable(:test_network, "current_speed")
+
+          assert_receive {:handle_obd2_error, :timeout}, 1_500
+          Process.sleep(1_200)
+
+          {:message_queue_len, queue_length} = Process.info(pid, :message_queue_len)
+          expect(queue_length <= 1) |> to(be_true())
+          expect(length(FakeSocket.sent())) |> to(eq(3))
+
+          :ok = Request.disable(:test_network, "current_speed")
+          Process.sleep(1_100)
+          count_after_disable = length(FakeSocket.sent())
+          Process.sleep(1_100)
+
+          expect(length(FakeSocket.sent())) |> to(eq(count_after_disable))
+        after
+          shutdown(pid)
+        end
+      end
+    end
+
+    context "when disabled and enabled again in quick succession" do
+      it "keeps a single period" do
+        pid = start_request([speed_parameter_spec()], 50)
+
+        try do
+          :ok = Request.subscribe(self(), :test_network, "current_speed")
+          for _ <- 1..30, do: FakeSocket.push_recv(<<0x41, 0x0D, 0x32>>)
+
+          :ok = Request.enable(:test_network, "current_speed")
+          Process.sleep(45)
+          :ok = Request.disable(:test_network, "current_speed")
+          :ok = Request.enable(:test_network, "current_speed")
+          Process.sleep(10)
+          count_after_reenable = length(FakeSocket.sent())
+          Process.sleep(500)
+
+          expect(length(FakeSocket.sent()) - count_after_reenable) |> to(be_close_to(10, 1))
         after
           shutdown(pid)
         end

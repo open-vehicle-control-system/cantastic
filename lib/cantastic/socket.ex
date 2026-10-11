@@ -101,17 +101,20 @@ defmodule Cantastic.Socket do
 
   @doc """
   Receive one `message` frame on the `socket`. This function will block until a message
-  is received or the underlying socket reports an error (timeout, closed, etc.).
+  is received, `timeout_ms` milliseconds elapse, or the underlying socket reports an error (closed, etc.).
 
-  Returns: `{:ok, %Cantastic.SocketMessage{} = message}` or `{:error, reason}`.
+  Returns: `{:ok, %Cantastic.SocketMessage{} = message}` or `{:error, reason}`, `{:error, :timeout}` once `timeout` elapses.
 
   ## Examples
 
       iex> Cantastic.Socket.receive_message(socket)
       {:ok, %Cantastic.SocketMessage{} = message}
+
+      iex> Cantastic.Socket.receive_message(socket, 1_000)
+      {:error, :timeout}
   """
-  def receive_message(socket) do
-    case :socket.recvmsg(socket) do
+  def receive_message(socket, timeout_ms \\ :infinity) do
+    case :socket.recvmsg(socket, timeout_ms) do
       {:ok,
        %{
          iov: [raw],

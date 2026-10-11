@@ -17,6 +17,8 @@ defmodule Cantastic.OBD2.Request do
   alias Cantastic.{Interface, Socket}
   alias Cantastic.OBD2.{Codec, Response}
 
+  @response_timeout_ms 1_000
+
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
   end
@@ -39,34 +41,44 @@ defmodule Cantastic.OBD2.Request do
        request_specification: request_specification,
        response_handlers: [],
        sending_timer: nil,
+       tick_ref: nil,
+       next_tick_at_ms: nil,
        raw_request: raw_request
      }}
   end
 
   @impl true
+  def handle_info({:tick, tick_ref}, %{tick_ref: tick_ref} = state) do
+    send_request(state)
+    {:noreply, schedule_next_tick(state)}
+  end
+
+  # A tick of a timer cancelled by disable/2.
+  def handle_info({:tick, _stale_tick_ref}, state) do
+    {:noreply, state}
+  end
+
   def handle_info(:send_request, state) do
-    with :ok <- Socket.send(state.socket, state.raw_request),
-         {:ok, socket_message} <- Socket.receive_message(state.socket),
-         {:ok, response} <- Response.interpret(state.request_specification, socket_message) do
-      send_to_response_handlers(state.response_handlers, response)
-      {:noreply, state}
-    else
-      {:error, error} ->
-        send_to_error_handlers(state.response_handlers, error)
-        {:noreply, state}
-    end
+    send_request(state)
+    {:noreply, state}
   end
 
   @impl true
   def handle_cast(:enable, state) do
-    case state.sending_timer do
+    case state.tick_ref do
       nil ->
-        # The interval only fires after a full period, so the first request
+        # The first tick only fires after a full period, so the first request
         # goes out now: a request enabled briefly (or with a long frequency)
         # would otherwise never be sent.
         send(self(), :send_request)
-        {:ok, timer} = :timer.send_interval(state.request_specification.frequency, :send_request)
-        {:noreply, %{state | sending_timer: timer}}
+
+        state = %{
+          state
+          | tick_ref: make_ref(),
+            next_tick_at_ms: System.monotonic_time(:millisecond)
+        }
+
+        {:noreply, schedule_next_tick(state)}
 
       _ ->
         {:noreply, state}
@@ -79,8 +91,8 @@ defmodule Cantastic.OBD2.Request do
         {:noreply, state}
 
       sending_timer ->
-        {:ok, _} = :timer.cancel(sending_timer)
-        {:noreply, %{state | sending_timer: nil}}
+        Process.cancel_timer(sending_timer)
+        {:noreply, %{state | sending_timer: nil, tick_ref: nil, next_tick_at_ms: nil}}
     end
   end
 
@@ -88,6 +100,31 @@ defmodule Cantastic.OBD2.Request do
   def handle_cast({:subscribe, response_handler}, state) do
     response_handlers = [response_handler | state.response_handlers]
     {:noreply, %{state | response_handlers: response_handlers}}
+  end
+
+  defp send_request(state) do
+    with :ok <- Socket.send(state.socket, state.raw_request),
+         {:ok, socket_message} <- Socket.receive_message(state.socket, @response_timeout_ms),
+         {:ok, response} <- Response.interpret(state.request_specification, socket_message) do
+      send_to_response_handlers(state.response_handlers, response)
+    else
+      {:error, error} -> send_to_error_handlers(state.response_handlers, error)
+    end
+  end
+
+  # Ticks stay on the grid started by enable/2; overrun periods are skipped.
+  defp schedule_next_tick(state) do
+    frequency = state.request_specification.frequency
+    now_ms = System.monotonic_time(:millisecond)
+    next_tick_at_ms = state.next_tick_at_ms + frequency
+
+    next_tick_at_ms =
+      if next_tick_at_ms > now_ms,
+        do: next_tick_at_ms,
+        else: next_tick_at_ms + (div(now_ms - next_tick_at_ms, frequency) + 1) * frequency
+
+    timer = Process.send_after(self(), {:tick, state.tick_ref}, next_tick_at_ms, abs: true)
+    %{state | sending_timer: timer, next_tick_at_ms: next_tick_at_ms}
   end
 
   defp send_to_response_handlers(response_handlers, response) do
@@ -106,6 +143,8 @@ defmodule Cantastic.OBD2.Request do
 
   @doc """
   Enable the OBD2 request(s), the request(s) is/are then emitted on the bus once immediately, then at the predefined frequency.
+
+  Each request waits up to #{@response_timeout_ms} ms for its response, then reports `{:handle_obd2_error, :timeout}`. A request that takes longer than the period skips the periods it overran instead of queueing them.
 
   Returns: `:ok`
 
