@@ -17,8 +17,13 @@ defmodule Cantastic.MixProject do
       ],
       source_url: "https://github.com/Spin42/cantastic",
       homepage_url: "https://github.com/Spin42/cantastic",
-      test_coverage: [tool: ExCoveralls, test_task: "espec"],
-      preferred_cli_env: [
+      test_coverage: [tool: ExCoveralls, test_task: "espec"]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
         espec: :test,
         coveralls: :test,
         "coveralls.detail": :test,
