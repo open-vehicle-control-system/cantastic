@@ -18,6 +18,7 @@ defmodule Cantastic.Emitter do
 
   """
   use GenServer
+  require Logger
   alias Cantastic.{Interface, Frame, Socket}
 
   def start_link(%{process_name: process_name} = args) do
@@ -37,20 +38,30 @@ defmodule Cantastic.Emitter do
        network_name: network_name,
        parameters_builder_function: :default,
        sending_timer: nil,
+       tick_ref: nil,
+       next_tick_at_ms: nil,
        data: %{},
        frequency: frame_specification.frequency,
        frame_specification: frame_specification,
        failed_sending_count: 0,
+       consecutive_failed_sending_count: 0,
        last_sending_error_reason: nil
      }}
   end
 
   @impl true
+  def handle_info({:tick, tick_ref}, %{tick_ref: tick_ref} = state) do
+    state = state |> emit() |> schedule_next_tick()
+    {:noreply, state}
+  end
+
+  # A tick of a timer cancelled by disable/2.
+  def handle_info({:tick, _stale_tick_ref}, state) do
+    {:noreply, state}
+  end
+
   def handle_info(:send_frame, state) do
-    {:ok, parameters, data} = state.parameters_builder_function.(state.data)
-    {:ok, raw_frame} = Frame.build_raw(state.frame_specification, parameters)
-    state = send_raw(state, raw_frame)
-    {:noreply, %{state | data: data}}
+    {:noreply, emit(state)}
   end
 
   @impl true
@@ -62,10 +73,15 @@ defmodule Cantastic.Emitter do
 
   @impl true
   def handle_cast(:enable, state) do
-    case state.sending_timer do
+    case state.tick_ref do
       nil ->
-        {:ok, timer} = :timer.send_interval(state.frequency, :send_frame)
-        {:noreply, %{state | sending_timer: timer}}
+        state = %{
+          state
+          | tick_ref: make_ref(),
+            next_tick_at_ms: System.monotonic_time(:millisecond)
+        }
+
+        {:noreply, schedule_next_tick(state)}
 
       _ ->
         {:noreply, state}
@@ -79,8 +95,8 @@ defmodule Cantastic.Emitter do
         {:noreply, state}
 
       sending_timer ->
-        {:ok, _} = :timer.cancel(sending_timer)
-        {:noreply, %{state | sending_timer: nil}}
+        Process.cancel_timer(sending_timer)
+        {:noreply, %{state | sending_timer: nil, tick_ref: nil, next_tick_at_ms: nil}}
     end
   end
 
@@ -196,6 +212,8 @@ defmodule Cantastic.Emitter do
   @doc """
   Enable the emitter(s), the frame(s) is/are then emitted on the bus at the predefined frequency.
 
+  A send that takes longer than the period skips the periods it overran instead of queueing them.
+
   Returns: `:ok`
 
   ## Examples
@@ -258,17 +276,53 @@ defmodule Cantastic.Emitter do
     GenServer.cast(emitter, {:forward, frame})
   end
 
+  defp emit(state) do
+    {:ok, parameters, data} = state.parameters_builder_function.(state.data)
+    {:ok, raw_frame} = Frame.build_raw(state.frame_specification, parameters)
+    state = send_raw(state, raw_frame)
+    %{state | data: data}
+  end
+
+  # Ticks stay on the grid started by enable/2; overrun periods are skipped.
+  defp schedule_next_tick(state) do
+    now_ms = System.monotonic_time(:millisecond)
+    next_tick_at_ms = state.next_tick_at_ms + state.frequency
+
+    next_tick_at_ms =
+      if next_tick_at_ms > now_ms,
+        do: next_tick_at_ms,
+        else:
+          next_tick_at_ms + (div(now_ms - next_tick_at_ms, state.frequency) + 1) * state.frequency
+
+    timer = Process.send_after(self(), {:tick, state.tick_ref}, next_tick_at_ms, abs: true)
+    %{state | sending_timer: timer, next_tick_at_ms: next_tick_at_ms}
+  end
+
   defp send_raw(state, raw_frame) do
     case Socket.send(state.socket, raw_frame) do
       :ok ->
-        state
+        if state.consecutive_failed_sending_count > 0 do
+          Logger.info(
+            "[Cantastic] #{frame_label(state)} sent again after " <>
+              "#{state.consecutive_failed_sending_count} failed sends"
+          )
+        end
+
+        %{state | consecutive_failed_sending_count: 0}
 
       {:error, reason} ->
+        if state.consecutive_failed_sending_count == 0 do
+          Logger.warning("[Cantastic] #{frame_label(state)} failed to send: #{inspect(reason)}")
+        end
+
         %{
           state
           | failed_sending_count: state.failed_sending_count + 1,
+            consecutive_failed_sending_count: state.consecutive_failed_sending_count + 1,
             last_sending_error_reason: reason
         }
     end
   end
+
+  defp frame_label(state), do: "#{state.network_name}.#{state.frame_specification.name}"
 end
