@@ -254,5 +254,18 @@ defmodule Cantastic.ReceiverSpec do
         assert_receive {:handle_frame, %Frame{signals: %{"voltage" => %{value: 30}}}}, 1_000
       end
     end
+
+    context "when frames are queued faster than one per millisecond" do
+      it "delivers 2000 queued frames within 1.5 seconds" do
+        :ok = Receiver.subscribe(self(), :test_network, "battery_status")
+        Enum.each(1..2_000, fn _ -> FakeSocket.push_recv(socketcan_frame(0x100, <<0x32, 0x00>>)) end)
+        deadline = System.monotonic_time(:millisecond) + 1_500
+
+        Enum.each(1..2_000, fn _ ->
+          remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+          assert_receive {:handle_frame, %Frame{}}, remaining
+        end)
+      end
+    end
   end
 end

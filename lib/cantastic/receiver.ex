@@ -161,9 +161,12 @@ defmodule Cantastic.Receiver do
     end)
   end
 
-  defp receive_frame(delay \\ 0) do
-    Process.send_after(self(), :receive_frame, delay)
-  end
+  defp receive_frame(delay \\ 0)
+
+  # A 0 ms timer still waits for the next 1 ms timer tick, which would cap reception at 1000 frames/s.
+  defp receive_frame(0), do: send(self(), :receive_frame)
+
+  defp receive_frame(delay), do: Process.send_after(self(), :receive_frame, delay)
 
   @doc """
   Subscribe `frame_handler :: pid()` to all frames received on a CAN network.
