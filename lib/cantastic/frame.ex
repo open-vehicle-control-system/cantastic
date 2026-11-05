@@ -13,7 +13,7 @@ defmodule Cantastic.Frame do
     * `:raw_data` The raw bytes received on the CAN network.
     * `:network_name` The name of the CAN network as defined in your YAML file.
     * `:created_at` The `DateTime` at which the   `Struct` has been created in OTP.
-    * `:reception_timestamp`  The `DateTime` at which the frame was received by the kernel.
+    * `:reception_timestamp`  When the kernel received the frame, in microseconds since the Unix epoch. It follows the wall clock, so it can step when the system time is set: measure intervals with `System.monotonic_time/1` instead.
     * `:signals` A `Map` of the signals contained in this frame.
   """
 
