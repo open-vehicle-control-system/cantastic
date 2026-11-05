@@ -1,7 +1,7 @@
 defmodule Cantastic.OBD2.UdsRoutineSpec do
   use ESpec
   alias Cantastic.OBD2.{Request, RequestSpecification, Response}
-  alias Cantastic.{SocketMessage, FakeSocket}
+  alias Cantastic.FakeSocket
 
   @process_name :CantasticTestNetworkUdsRoutineOBD2Request
 
@@ -59,9 +59,8 @@ defmodule Cantastic.OBD2.UdsRoutineSpec do
 
     allow(Cantastic.Socket)
     |> to(
-      accept(:receive_message, fn _socket ->
-        raw = FakeSocket.pop_recv()
-        {:ok, %SocketMessage{raw: raw, reception_timestamp: 0}}
+      accept(:receive_message, fn _socket, timeout_ms ->
+        FakeSocket.receive_message(timeout_ms)
       end)
     )
 

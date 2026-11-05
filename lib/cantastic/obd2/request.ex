@@ -14,8 +14,10 @@ defmodule Cantastic.OBD2.Request do
 
   use GenServer
   require Logger
-  alias Cantastic.{Interface, Socket}
+  alias Cantastic.{Interface, Socket, Ticker}
   alias Cantastic.OBD2.{Codec, Response}
+
+  @response_timeout_ms 1_000
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -38,35 +40,36 @@ defmodule Cantastic.OBD2.Request do
        socket: socket,
        request_specification: request_specification,
        response_handlers: [],
-       sending_timer: nil,
+       ticker: nil,
        raw_request: raw_request
      }}
   end
 
   @impl true
+  def handle_info({:tick, ref}, %{ticker: %Ticker{ref: ref}} = state) do
+    send_request(state)
+    {:noreply, %{state | ticker: Ticker.next(state.ticker)}}
+  end
+
+  # A tick of a ticker cancelled by disable/2.
+  def handle_info({:tick, _stale_tick_ref}, state) do
+    {:noreply, state}
+  end
+
   def handle_info(:send_request, state) do
-    with :ok <- Socket.send(state.socket, state.raw_request),
-         {:ok, socket_message} <- Socket.receive_message(state.socket),
-         {:ok, response} <- Response.interpret(state.request_specification, socket_message) do
-      send_to_response_handlers(state.response_handlers, response)
-      {:noreply, state}
-    else
-      {:error, error} ->
-        send_to_error_handlers(state.response_handlers, error)
-        {:noreply, state}
-    end
+    send_request(state)
+    {:noreply, state}
   end
 
   @impl true
   def handle_cast(:enable, state) do
-    case state.sending_timer do
+    case state.ticker do
       nil ->
-        # The interval only fires after a full period, so the first request
+        # The first tick only fires after a full period, so the first request
         # goes out now: a request enabled briefly (or with a long frequency)
         # would otherwise never be sent.
         send(self(), :send_request)
-        {:ok, timer} = :timer.send_interval(state.request_specification.frequency, :send_request)
-        {:noreply, %{state | sending_timer: timer}}
+        {:noreply, %{state | ticker: Ticker.start(state.request_specification.frequency)}}
 
       _ ->
         {:noreply, state}
@@ -74,20 +77,23 @@ defmodule Cantastic.OBD2.Request do
   end
 
   def handle_cast(:disable, state) do
-    case state.sending_timer do
-      nil ->
-        {:noreply, state}
-
-      sending_timer ->
-        {:ok, _} = :timer.cancel(sending_timer)
-        {:noreply, %{state | sending_timer: nil}}
-    end
+    {:noreply, %{state | ticker: Ticker.cancel(state.ticker)}}
   end
 
   @impl true
   def handle_cast({:subscribe, response_handler}, state) do
     response_handlers = [response_handler | state.response_handlers]
     {:noreply, %{state | response_handlers: response_handlers}}
+  end
+
+  defp send_request(state) do
+    with :ok <- Socket.send(state.socket, state.raw_request),
+         {:ok, socket_message} <- Socket.receive_message(state.socket, @response_timeout_ms),
+         {:ok, response} <- Response.interpret(state.request_specification, socket_message) do
+      send_to_response_handlers(state.response_handlers, response)
+    else
+      {:error, error} -> send_to_error_handlers(state.response_handlers, error)
+    end
   end
 
   defp send_to_response_handlers(response_handlers, response) do
@@ -106,6 +112,8 @@ defmodule Cantastic.OBD2.Request do
 
   @doc """
   Enable the OBD2 request(s), the request(s) is/are then emitted on the bus once immediately, then at the predefined frequency.
+
+  Each request waits up to #{@response_timeout_ms} ms for its response, then reports `{:handle_obd2_error, :timeout}`. A request that takes longer than the period skips the periods it overran instead of queueing them.
 
   Returns: `:ok`
 
