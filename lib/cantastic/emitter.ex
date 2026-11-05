@@ -18,7 +18,8 @@ defmodule Cantastic.Emitter do
 
   """
   use GenServer
-  alias Cantastic.{Interface, Frame, Socket}
+  require Logger
+  alias Cantastic.{Interface, Frame, Socket, Ticker}
 
   def start_link(%{process_name: process_name} = args) do
     GenServer.start_link(__MODULE__, args, name: process_name)
@@ -36,21 +37,29 @@ defmodule Cantastic.Emitter do
        socket: socket,
        network_name: network_name,
        parameters_builder_function: :default,
-       sending_timer: nil,
+       ticker: nil,
        data: %{},
        frequency: frame_specification.frequency,
        frame_specification: frame_specification,
        failed_sending_count: 0,
+       consecutive_failed_sending_count: 0,
        last_sending_error_reason: nil
      }}
   end
 
   @impl true
+  def handle_info({:tick, ref}, %{ticker: %Ticker{ref: ref}} = state) do
+    state = emit(state)
+    {:noreply, %{state | ticker: Ticker.next(state.ticker)}}
+  end
+
+  # A tick of a ticker cancelled by disable/2.
+  def handle_info({:tick, _stale_tick_ref}, state) do
+    {:noreply, state}
+  end
+
   def handle_info(:send_frame, state) do
-    {:ok, parameters, data} = state.parameters_builder_function.(state.data)
-    {:ok, raw_frame} = Frame.build_raw(state.frame_specification, parameters)
-    state = send_raw(state, raw_frame)
-    {:noreply, %{state | data: data}}
+    {:noreply, emit(state)}
   end
 
   @impl true
@@ -62,26 +71,15 @@ defmodule Cantastic.Emitter do
 
   @impl true
   def handle_cast(:enable, state) do
-    case state.sending_timer do
-      nil ->
-        {:ok, timer} = :timer.send_interval(state.frequency, :send_frame)
-        {:noreply, %{state | sending_timer: timer}}
-
-      _ ->
-        {:noreply, state}
+    case state.ticker do
+      nil -> {:noreply, %{state | ticker: Ticker.start(state.frequency)}}
+      _ -> {:noreply, state}
     end
   end
 
   @impl true
   def handle_cast(:disable, state) do
-    case state.sending_timer do
-      nil ->
-        {:noreply, state}
-
-      sending_timer ->
-        {:ok, _} = :timer.cancel(sending_timer)
-        {:noreply, %{state | sending_timer: nil}}
-    end
+    {:noreply, %{state | ticker: Ticker.cancel(state.ticker)}}
   end
 
   @impl true
@@ -196,6 +194,8 @@ defmodule Cantastic.Emitter do
   @doc """
   Enable the emitter(s), the frame(s) is/are then emitted on the bus at the predefined frequency.
 
+  A send that takes longer than the period skips the periods it overran instead of queueing them.
+
   Returns: `:ok`
 
   ## Examples
@@ -258,17 +258,38 @@ defmodule Cantastic.Emitter do
     GenServer.cast(emitter, {:forward, frame})
   end
 
+  defp emit(state) do
+    {:ok, parameters, data} = state.parameters_builder_function.(state.data)
+    {:ok, raw_frame} = Frame.build_raw(state.frame_specification, parameters)
+    state = send_raw(state, raw_frame)
+    %{state | data: data}
+  end
+
   defp send_raw(state, raw_frame) do
     case Socket.send(state.socket, raw_frame) do
       :ok ->
-        state
+        if state.consecutive_failed_sending_count > 0 do
+          Logger.info(
+            "[Cantastic] #{frame_label(state)} sent again after " <>
+              "#{state.consecutive_failed_sending_count} failed sends"
+          )
+        end
+
+        %{state | consecutive_failed_sending_count: 0}
 
       {:error, reason} ->
+        if state.consecutive_failed_sending_count == 0 do
+          Logger.warning("[Cantastic] #{frame_label(state)} failed to send: #{inspect(reason)}")
+        end
+
         %{
           state
           | failed_sending_count: state.failed_sending_count + 1,
+            consecutive_failed_sending_count: state.consecutive_failed_sending_count + 1,
             last_sending_error_reason: reason
         }
     end
   end
+
+  defp frame_label(state), do: "#{state.network_name}.#{state.frame_specification.name}"
 end
