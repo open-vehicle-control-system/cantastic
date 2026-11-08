@@ -78,7 +78,7 @@ defmodule Cantastic.Frame do
     checksum_specification = frame_specification.checksum_signal_specification
     raw_checksum = Signal.build_raw_decimal(checksum_specification, D.new(checksum))
     head_length = checksum_specification.value_start
-    <<head::bitstring-size(head_length), tail::bitstring>> = raw_data
+    <<head::bitstring-size(^head_length), tail::bitstring>> = raw_data
     <<head::bitstring, raw_checksum::bitstring, tail::bitstring>>
   end
 

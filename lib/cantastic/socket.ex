@@ -5,7 +5,6 @@ defmodule Cantastic.Socket do
     If you do not want to use Cantastic's declarative way of defining frames, you could use this module to interact directly with the CAN Bus.
   """
 
-  require Logger
   alias Cantastic.SocketMessage
 
   # Source: https://github.com/linux-can/linux/blob/56cfd2507d3e720f4b1dbf9513e00680516a0826/include/linux/socket.h#L193

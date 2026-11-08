@@ -126,19 +126,19 @@ defmodule Cantastic.Signal do
     int =
       case {signal_specification.endianness, signal_specification.sign} do
         {"little", "signed"} ->
-          <<val::little-signed-integer-size(value_length)>> = raw_val
+          <<val::little-signed-integer-size(^value_length)>> = raw_val
           val
 
         {"little", "unsigned"} ->
-          <<val::little-unsigned-integer-size(value_length)>> = raw_val
+          <<val::little-unsigned-integer-size(^value_length)>> = raw_val
           val
 
         {"big", "signed"} ->
-          <<val::big-signed-integer-size(value_length)>> = raw_val
+          <<val::big-signed-integer-size(^value_length)>> = raw_val
           val
 
         {"big", "unsigned"} ->
-          <<val::big-unsigned-integer-size(value_length)>> = raw_val
+          <<val::big-unsigned-integer-size(^value_length)>> = raw_val
           val
       end
 
@@ -168,7 +168,7 @@ defmodule Cantastic.Signal do
 
   @doc false
   defp extract_segment(raw_data, head_length, value_length) do
-    <<_head::bitstring-size(head_length), segment::bitstring-size(value_length),
+    <<_head::bitstring-size(^head_length), segment::bitstring-size(^value_length),
       _tail::bitstring>> = raw_data
 
     segment

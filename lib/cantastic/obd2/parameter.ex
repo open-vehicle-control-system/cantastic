@@ -66,7 +66,7 @@ defmodule Cantastic.OBD2.Parameter do
       value_length = parameter_specification.value_length
       id = parameter.id
 
-      <<^id::integer-size(id_size), raw_value::bitstring-size(value_length),
+      <<^id::integer-size(^id_size), raw_value::bitstring-size(^value_length),
         truncated_raw_parameters::bitstring>> = raw_parameters
 
       value = decode_value(raw_value, parameter_specification, value_length)
@@ -102,19 +102,19 @@ defmodule Cantastic.OBD2.Parameter do
     int =
       case {parameter_specification.endianness, parameter_specification.sign} do
         {"little", "signed"} ->
-          <<val::little-signed-integer-size(value_length)>> = raw_val
+          <<val::little-signed-integer-size(^value_length)>> = raw_val
           val
 
         {"little", "unsigned"} ->
-          <<val::little-unsigned-integer-size(value_length)>> = raw_val
+          <<val::little-unsigned-integer-size(^value_length)>> = raw_val
           val
 
         {"big", "signed"} ->
-          <<val::big-signed-integer-size(value_length)>> = raw_val
+          <<val::big-signed-integer-size(^value_length)>> = raw_val
           val
 
         {"big", "unsigned"} ->
-          <<val::big-unsigned-integer-size(value_length)>> = raw_val
+          <<val::big-unsigned-integer-size(^value_length)>> = raw_val
           val
       end
 
