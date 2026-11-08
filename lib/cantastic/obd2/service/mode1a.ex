@@ -54,7 +54,7 @@ defmodule Cantastic.OBD2.Service.Mode1A do
     value_length = parameter_specification.value_length
 
     case raw_parameters do
-      <<^expected_id::integer-size(8), data::bitstring-size(value_length), _rest::bitstring>> ->
+      <<^expected_id::integer-size(8), data::bitstring-size(^value_length), _rest::bitstring>> ->
         parameter = %Parameter{
           name: parameter_specification.name,
           id: parameter_specification.id,
