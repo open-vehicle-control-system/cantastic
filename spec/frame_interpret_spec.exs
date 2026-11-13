@@ -28,6 +28,25 @@ defmodule Cantastic.FrameInterpretSpec do
       expect(decoded.signals["value"].value) |> to(eq(1234))
     end
 
+    it "decodes a checksum signal as its integer value" do
+      with_checksum =
+        TestFactory.frame_specification(%{
+          name: "with_checksum",
+          signal_specifications: [
+            TestFactory.integer_signal_specification(%{name: "value", value_start: 0}),
+            TestFactory.integer_signal_specification(%{
+              name: "crc",
+              kind: "checksum",
+              value_start: 8
+            })
+          ]
+        })
+
+      {:ok, decoded} = Frame.interpret(frame(<<42, 0xA5>>), with_checksum)
+      expect(decoded.signals["value"].value) |> to(eq(42))
+      expect(decoded.signals["crc"].value) |> to(eq(0xA5))
+    end
+
     it "returns an error rather than raising on a frame too short for its signals" do
       # A single zero byte where four are expected — the boot-time bus
       # frame that used to crash the whole receiver.
