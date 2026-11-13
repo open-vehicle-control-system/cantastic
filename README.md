@@ -179,7 +179,7 @@ can_networks:
 | `:name` | The signal name, will be used in your own code to reference it | True |  |
 | `:value_start` | The bit number where the raw signal starts | True | |
 | `:value_length` | The number of bits to use for this signal | True | |
-| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"`, `"static"`, `"enum"`, `"checksum"` (emitted frames only, see below) | False | `"decimal"` |
+| `:kind` | The type of value to be returned, one of: `"decimal"`, `"integer"`, `"static"`, `"enum"`, `"checksum"` (see below) | False | `"decimal"` |
 | `:precision` | The precision to which a decimal signal should be rounded to | False | 2 |
 | `:sign` | Wheter the signal should be interpreted as a signed or unsigned integer | False | `"unsigned"` |
 | `:endianness` | The endianness to be used to interpret the signal | False | `"little"` |
@@ -228,6 +228,8 @@ can_networks:
 ##### Checksum signals
 
 An emitted frame can declare at most one signal of kind `"checksum"`. In the emitter's data, the value for that signal is a function: it receives the frame's raw data built from all the other signals (a bitstring without the checksum bits) and returns an integer. That integer is encoded with the signal's `value_length`, `endianness`, `sign`, `scale` and `offset`, then inserted at `value_start`.
+
+A received frame decodes its checksum signal as an integer, like an `"integer"` signal. Cantastic does not verify it: comparing it with the frame's data is the receiver's job.
 
 ```YAML
 emitted_frames:
