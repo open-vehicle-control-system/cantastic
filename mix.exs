@@ -50,7 +50,6 @@ defmodule Cantastic.MixProject do
       {:jason, "~> 1.2"},
       {:decimal, "~> 2.1 or ~> 3.1"},
       {:espec, "~> 1.10", only: :test},
-      {:faker, "~> 0.18", only: :test},
       {:excoveralls, "~> 0.18", only: :test},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}

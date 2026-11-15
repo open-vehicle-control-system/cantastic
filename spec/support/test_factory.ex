@@ -6,11 +6,11 @@ defmodule Cantastic.TestFactory do
 
   def integer_signal_specification(overrides \\ %{}) do
     base = %SignalSpecification{
-      name: Faker.Cat.name(),
+      name: "test_signal",
       kind: "integer",
       precision: 2,
       frame_id: 1,
-      frame_name: Faker.Cat.name(),
+      frame_name: "test_frame",
       value_start: 0,
       value_length: 8,
       endianness: "little",
@@ -20,7 +20,7 @@ defmodule Cantastic.TestFactory do
       scale: D.new(1),
       offset: D.new(0),
       sign: "unsigned",
-      value: Faker.random_between(0, 10000)
+      value: 42
     }
     Map.merge(base, Map.new(overrides))
   end

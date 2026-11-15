@@ -13,7 +13,6 @@ defmodule Cantastic.OBD2.Request do
   """
 
   use GenServer
-  require Logger
   alias Cantastic.{Interface, Socket}
   alias Cantastic.OBD2.{Codec, Response}
 

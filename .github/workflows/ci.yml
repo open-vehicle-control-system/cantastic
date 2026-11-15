@@ -18,8 +18,8 @@ concurrency:
 env:
   MIX_ENV: test
   # The toolchain OVCS pins in its mise.toml, which runs this library.
-  OTP_VERSION: "28.4.1"
-  ELIXIR_VERSION: "1.19.5"
+  OTP_VERSION: "29.1.2"
+  ELIXIR_VERSION: "1.20.4"
 
 jobs:
   check:

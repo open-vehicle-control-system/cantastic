@@ -87,7 +87,7 @@ defmodule Cantastic.OBD2.Service.Mode09 do
 
   defp extract_items(remaining, n, size, acc) do
     case remaining do
-      <<item::binary-size(size), rest::bitstring>> ->
+      <<item::binary-size(^size), rest::bitstring>> ->
         extract_items(rest, n - 1, size, [item | acc])
 
       _ ->
