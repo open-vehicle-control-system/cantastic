@@ -105,7 +105,7 @@ defmodule Cantastic.Signal do
             interpret_decimal(raw_value, signal_specification, value_length)
             |> D.round(signal_specification.precision)
 
-          "integer" ->
+          kind when kind in ["integer", "checksum"] ->
             interpret_decimal(raw_value, signal_specification, value_length)
             |> D.round()
             |> D.to_integer()
